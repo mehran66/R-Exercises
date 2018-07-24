@@ -1,0 +1,39 @@
+Variable,Description
+CNTY_ST,County and state name
+STUSAB,State abbreviation
+FIPS,FIPS code
+YCOORD,Y coordinate (meters)
+XCOORD,X coordinate (meters)
+SQYCORD,Y coordinate squared (for trend surface)
+SQXCORD,X coordinate squared (for trend surface)
+XYCOORD,X coordinate * Y coordinate (for trend surface)
+PPOV,Proportion of children in poverty
+PHSP,Proportion Hispanic
+PFHH,Proportion female-headed households
+PWKCO,Proportion work outside of county of residence
+PHSLS,Proportion less than high school educated
+PUNEM,Proportion unemployed
+PUDEM,"Proportion males underemployed, some work in 1999"
+PEXTR,Proportion employed in extractive industry
+PPSRV,Proportion employed in professional services
+PMSRV,Proportion employed in miscellaneous services
+PNDMFG,Proportion employed in non-durable manufacturing
+PNHSPW,Proportion non-Hispanic white
+PMNRTY,Proportion minority (total - non-Hispanic white)
+LO_POV,Natural log proportion children in poverty
+PFRN,Proportion foreign-born
+PNAT,Proportion native-born
+PBLK,"Proportion African American/black, alone and including Hispanic"
+P65UP,Proportion 65 and older
+PDSABL,Proportion disabled
+METRO,Metro county
+PERPOV,"Persistent poverty, 1970-2000 (ERS)"
+OTMIG,Rate of out-migration
+BINMIG,Rate of black in-migration from non-south
+INCARC,Proportion males 18-64 in correctional institutions
+BINCARC,Proportion black males 18-64 in correctional institutions
+SQRTPPOV,Square root proportion children in poverty
+SQRTUNEM,Square root proportion unemployed
+SQRTPFHH,Square root proportion female-headed households
+LOGHSPLS,Natural log proportion less than high school educated
+PHSPLUS,Natural log proportion high school educated or more

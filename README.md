@@ -1,5 +1,5 @@
 # R-Exercises
-My lab exercises for the quantitative methods course  (GEOG 5023) <br>
+My lab exercises for the quantitative methods course  (GEOG 5023) (Spring 2017) <br>
 
 Lab1: Inroduction to R and R Markdown<br>
 Lab2: Statistical Comparisons using t-tests<br>

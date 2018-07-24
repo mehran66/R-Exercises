@@ -1,0 +1,213 @@
+---
+title: "Graphics with ggplot2"
+author: "Merhan Ghandehari"
+date: "March 26, 2016"
+output: html_document
+---
+
+**1- Cocaine seizures**
+
+```{r eval=FALSE, warning=FALSE}
+library(ggplot2)
+data("cocaine", package = "ggvis")
+str(cocaine)
+summary(cocaine)
+```
+
+• state: the state in which the seizure occured
+• potency: the purity of cocaine (as percentage)
+• weight: the weight (in grams) of the seized cocaine 
+• month: the months in which the seizure occured
+• price: the estimated value (in USD).
+
+a)
+```{r warning=FALSE, fig.align='center'}
+cocaine2 = subset(cocaine, weight < 200)
+```
+
+b)
+```{r warning=FALSE, fig.align='center'}
+ggplot(cocaine2, aes(x = state)) + geom_bar() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+# Florida (FL), New York (NY) and Virginia (VA) have the highest number of seizures
+```
+
+c)
+```{r warning=FALSE, fig.align='center'}
+reorder_size <- function(x) {
+  factor(x, levels = names(sort(table(x), decreasing=TRUE)))
+}
+ggplot(cocaine2, aes(reorder_size(state))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+d)
+```{r warning=FALSE, fig.align='center'}
+ggplot(cocaine2, aes(x = weight)) + geom_histogram()
+# It is more likely that smaller weight happen more 
+```
+
+e)
+```{r warning=FALSE, fig.align='center'}
+ggplot(cocaine2, aes(x = potency, y = price)) + geom_point(alpha = 0.3) 
+# I do not see a clear relationshio netween price and potency
+ggplot(cocaine2, aes(x = weight, y = price)) + geom_point(alpha = 0.3)
+# It seems that there is a linear relationshio netween price and weight
+```
+
+f)
+```{r warning=FALSE, fig.align='center'}
+ggplot(cocaine2, aes(x = potency, y = price, color = weight)) + geom_point(alpha = 0.5) + scale_color_gradient(trans = "log") 
+```
+
+g)
+```{r warning=FALSE, fig.align='center'}
+ggplot(cocaine2, aes(x = weight, y = potency)) + geom_point(alpha = 0.3) + geom_smooth()
+# It seems that the average potency of lower weight cocaine is higher (considering weights below 150 grams)
+```
+
+
+**2- Flights data**
+
+a)
+```{r warning=FALSE, fig.align='center'}
+require(nycflights13)
+#hour, minute: the hour and minute of the departure
+#arr delay: the arrival delay of the incoming plane (in minutes)
+#dest: the destination.
+flights$time <- flights$hour + flights$minute / 60
+delay.per.hour <- aggregate(formula = arr_delay ~ time, data = flights, FUN = mean, na.rm = TRUE)
+```
+
+b)
+```{r warning=FALSE, fig.align='center'}
+ggplot(data = delay.per.hour, aes(time, arr_delay)) + geom_point()
+# It seems that arrival delay gradually increases from mornig 5am to 12am, and the sudenly we have several hour delays after midnight. So, it's better to take a flight in the morning.
+```
+
+c)
+```{r warning=FALSE, fig.align='center'}
+delay.per.hour$n = aggregate(formula = arr_delay ~ time, data = flights, FUN = length)[, "arr_delay"]
+ggplot(data = delay.per.hour, aes(time, arr_delay, size = n)) + geom_point(alpha = 0.3)
+# this plot is more informative because we can see the nmber of plots is different hours.For example, the number of fights after midnight is mush less than the other hours that cannot be understood in the previous plot.
+```
+
+d)
+```{r warning=FALSE, fig.align='center'}
+delay.per.hour.subset = subset(delay.per.hour, n > 50)
+ggplot(data = delay.per.hour.subset, aes(time, arr_delay, size = n)) + geom_point() + scale_size_area()
+```
+
+e)
+```{r warning=FALSE, fig.align='center'}
+library(dplyr)
+delay.per.hour = summarise(group_by(flights, time), arr_delay = mean(arr_delay, na.rm = TRUE))
+```
+
+**3- Flights data, continued**
+
+a)
+```{r warning=FALSE, fig.align='center'}
+require(nycflights13)
+delay.per.dest = aggregate(formula = arr_delay ~ dest, data = flights,FUN = mean, na.rm = TRUE)
+```
+
+b)
+```{r warning=FALSE, fig.align='center'}
+delay.per.dest$n =  aggregate(formula = arr_delay ~ dest, data = flights, FUN = length)[, "arr_delay"]
+```
+
+c)
+```{r warning=FALSE, fig.align='center'}
+delay.per.dest = merge(x = delay.per.dest, y = airports, by.x = "dest", by.y = "faa", all.x = T, all.y = F)
+```
+
+d)
+```{r warning=FALSE, fig.align='center'}
+ggplot(data = delay.per.dest, aes(lon, lat, size = n)) + geom_point(alpha = 0.5)
+```
+
+e)
+```{r warning=FALSE, fig.align='center'}
+ggplot(data = delay.per.dest, aes(lon, lat, size = n, color = arr_delay)) + geom_point()
+#It seems that there is not any relationship between average arrival delay and number of departing planes
+```
+
+f)
+```{r warning=FALSE, fig.align='center'}
+ggplot(data = delay.per.dest, aes(lon, lat, size = n, color = arr_delay)) + geom_point() + scale_size_area()
+```
+
+g)
+```{r warning=FALSE, fig.align='center'}
+require(maps)
+delay.per.dest.subset = subset(delay.per.dest, lon > -140)
+ggplot(data = delay.per.dest.subset, aes(lon, lat, size = n, color = arr_delay)) + geom_point() + borders(database = "state", size = 0.5) + scale_size_area()
+
+```
+
+
+**4- Gapminder: Fact-based world view**
+
+a)
+```{r warning=FALSE, fig.align='center'}
+require(gapminder, quietly = TRUE)
+
+ggplot(subset(gapminder, year == 2002), aes(x = gdpPercap, y = lifeExp)) + geom_point()
+```
+
+b)
+```{r warning=FALSE, fig.align='center'}
+ggplot(subset(gapminder, year == 2002), aes(x = gdpPercap, y = lifeExp, fill = country, )) + geom_point(aes(size = sqrt(pop)), pch = 21, show_guide = FALSE)
+```
+
+c)
+```{r warning=FALSE, fig.align='center'}
+ggplot(subset(gapminder, year == 2002), aes(x = gdpPercap, y = lifeExp, fill = country, )) + geom_point(aes(size = sqrt(pop)), pch = 21, show_guide = FALSE) + scale_x_log10()
+
+```
+
+d)
+```{r warning=FALSE, fig.align='center'}
+ggplot(subset(gapminder, year == 2002), aes(x = gdpPercap, y = lifeExp, fill = country, )) + geom_point(aes(size = sqrt(pop)), pch = 21, show_guide = FALSE) + scale_x_log10() + scale_size_continuous(range = c(1,40))
+
+```
+
+e)
+```{r warning=FALSE, fig.align='center'}
+ggplot(subset(gapminder, year == 2002), aes(x = gdpPercap, y = lifeExp, fill = country, )) + geom_point(aes(size = sqrt(pop)), pch = 21, show_guide = FALSE) + scale_x_log10() + scale_size_continuous(range = c(1,40)) + scale_fill_manual(values = country_colors)
+```
+
+e)
+```{r warning=FALSE, fig.align='center'}
+ggplot(subset(gapminder, year == 2002), aes(x = gdpPercap, y = lifeExp, fill = country, )) + geom_point(aes(size = sqrt(pop)), pch = 21, show_guide = FALSE) + scale_x_log10() + scale_size_continuous(range = c(1,40)) + scale_fill_manual(values = country_colors) + facet_grid( . ~ continent)
+```
+
+**5- Napoleon**
+
+a)
+```{r warning=FALSE, fig.align='center'}
+data("Minard.troops", package = "HistData")
+str(Minard.troops)
+
+data("Minard.cities", package = "HistData")
+str(Minard.cities)
+
+plot_troops = ggplot(Minard.troops, aes(x = long, y = lat)) + geom_path(alpha = 0.6, aes(size = survivors, colour = direction, group = group), lineend = "round")
+plot_troops
+```
+
+b)
+```{r warning=FALSE, fig.align='center'}
+plot_both = plot_troops + geom_text(aes(label = city), size = 3, data = Minard.cities)
+plot_both
+```
+
+c)
+```{r warning=FALSE, fig.align='center'}
+plot_polished = plot_both + scale_color_manual(values = c("red", "grey")) + xlab(NULL) + ylab(NULL)
+plot_polished
+```
+
+
+library(knitr)
+rmarkdown::render('ghandehari_lab06.Rmd')

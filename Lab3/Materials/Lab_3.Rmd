@@ -1,0 +1,242 @@
+---
+title: 'Lab 3: Mammal Sleep Patterns'
+output: html_document
+---
+
+## Introduction
+
+A common objective of researchers is to determine whether two variables are associated with one another. Does patronage of a public facility vary with income? Does commuting vary with distance? Do housing prices vary with accessibility to major highways? Researchers are often interested in how variables *co-vary*. The correlation coefficient provies a standardized measure of just this: the linear association between two variables. However, it is important to remember that the existence of a linear association between two variables does not necessarily imply that there is a *causal* relationship between the two variables. If we are interested in causal relationships, then we must turn to regression analysis. Here, the relationship between one or more *independent* variables and a *dependent* variable can be explored.
+
+For example, perhaps we are interested in the relationship between housing price and the size of a house (as measured by the number of finished square feet):
+
+```{r fig.width=5}
+sales = read.csv("Data/Milwaukee_Sales_2012.csv")  # Load some data
+cor.test(sales$SalePrice, sales$FinSqft)  # Correlation test
+m = lm(SalePrice ~ FinSqft, data=sales)  # Fit a model
+plot(SalePrice ~ FinSqft, data=sales)  # Scatterplot...
+abline(m, col="red")  # ...with best fit line
+```
+
+In the following two-part lab exercise, we will utlize correlation (Part I) and regression analysis (Part II) techniques to explore the relationship between various measures used to describe the sleep patterns of different mammals. We will explore how these variables co-vary, as well as explore possible causal links between the sleep patterns of mammals and their physiological attributes.
+
+The `SleepMammals` dataset describes a number of variables that describe the sleep patterns of different mammals:
+
+Variable    | Description
+------------|---------------
+Body Wt     | Body weight (kg)
+Brain Wt    | Brain weight (g)
+NonDreaming | Slow wave sleep (hrs/day)
+Dreaming    | Paradoxial sleep (hrs/day)
+TotalSleep  | Total sleep (hrs/day)
+LifeSpan    | Maximum life span (yrs)
+Gestation   | Gestation time (days)
+Predation   | Predation index (1=low, 5=high)
+Exposure    | Exposure index (1=low, 5=high)
+Danger      | Danger index (1=low, 5=high)
+
+# Part I
+
+## Load in the Data
+
+This data is in a format common to ecological surveys. It is not a regular csv file, and so care is required when loading into `R`. Normally, it is a good idea to inspect a dataset in a text editor (e.g., notepad) before loading data into into `R` so that you can figure out how the dataset is structured/formatted. Once we have an idea of the structure of the dataset, we can use the `read.table` command in `R` to get this loaded into a `data.frame`. Alternatively, we can use `Tools > Import Dataset > From Text File...` to help us figure out which parameters to use.
+
+```{r}
+mammals = read.table("Data/SleepMammals.txt", header=TRUE)
+summary(mammals)
+```
+
+Note that in the above summary, the values for `Predation`, `Exposure`, and `Danger` are treated as numeric (integers), whereas according to the above table, they should be treated as categorical data (`factors`). To fix this, we can convert those variables to `factors` using the `as.factor` function:
+
+```{r}
+mammals$Predation = as.factor(mammals$Predation)
+mammals$Exposure = as.factor(mammals$Exposure)
+mammals$Danger = as.factor(mammals$Danger)
+
+# Show a summary of these newly converted variables 
+summary(mammals[, c("Predation", "Exposure", "Danger")])
+```
+
+Alternatively, we could have specified the column types in the `read.table` function using the `colClasses` argument (type `?read.table` into the console to find out more about the `read.table` function and its various arguments).
+
+Now that we have loaded the mammal sleep data into `R`, take a look at the variables and explore the dataset using the various summary tools available in `R`. Once you have a good idea of the structure of the dataset and the distribution of the variables, you should be able to answer the following questions to learn how to implement correlation, regression, and multiple regression techniques. We will also learn about making different types of plots/graphics.
+
+## Descriptive Statistics & Visualization
+
+1.	Create a new variable in the `mammals` `data.frame` named `BrainPct` that is the percentage of total body weight that the brain weighs. Note that the body weight is given in kilograms (kg) and brain weight is given in grams (g), so the calculation is `BrainPct = BrainWt / (BodyWt * 1000)`.
+    ```{r}
+    # Show your R code here
+    ```
+
+  * Which animal has the highest `BrainPct`?
+    ```{r}
+    # Show your R code here
+    ```
+
+  * Which animal has the lowest `BrainPct`?
+    ```{r}
+    # Show your R code here
+    ```
+
+  * What is the mean and median of `BrainPct`?
+    ```{r}
+    # Show your R code here
+    ```
+
+2. Take a look at the distribution of `BrainPct` by plotting a histogram.
+  * Try to produce an alternative plot (or two) that might also help you explore the overall distribution of this variable.
+    ```{r}
+    # Show your R code to generate a histogram and other plots
+    ```
+
+  * Does the distribution appear positively (right) skewed, negatively (left) skewed, or normally distributed?
+    ```{r}
+    # Write your answer here
+    ```
+
+  * Compute the [skewness statistic](https://en.wikipedia.org/wiki/Skewness) (you'll need the `moments` package to do this, if you don't have it... install it!). Does it indicate the distribution is skewed?
+    ```{r}
+    # Show your R code here
+    ```
+
+3. Create a scatterplot with `LifeSpan` on the y-axis and `Gestation` on the x-axis.
+    ```{r}
+    # Show your R code here
+    ```
+
+4.	Generate a boxplot that compares body weight across the five `Danger` levels. 
+    ```{r}
+    # Show your R code here
+    ```
+
+  * Finally, create a boxplot that compares `TotalSleep` across the five `Danger` levels.
+    ```{r}
+    # Show your R code here
+    ```
+
+  * What inferences can you make about the sleeping conditions of an animal from this box plot?
+    ```{r}
+    # Write your answer here
+    ```
+
+## Data Transformations
+
+5.	Log-transform the `BrainPct` data and save it as a new variable `LogBrainPct`.
+    ```{r}
+    # Show your R code here
+    ```
+
+  * Plot the histogram of `LogBrainPct` with a normal curve added (Hint: you'll want to use `freq=FALSE` in your `hist` function to plot densities instead of frequencies).
+    ```{r eval=FALSE}
+    # Show your R code here
+    # You can add a normal curve with the following code:
+    # Make sure you use freq=FALSE in your hist() function
+    mu = mean(mammals$LogBrainPct)
+    std = sd(mammals$LogBrainPct)
+    curve(dnorm(x, mean=mu, sd=std), add=TRUE)  # Add curve to plot
+    ```
+
+6. Discussion Question:
+  * What property of a data distribution are you attempting to change by taking the logarithm? Why do you think this is a useful thing to do? You'll need to refer to the literature and Google to answer this question.
+    ```{r}
+    # Write your answer here
+    ```
+    
+## Correlation Analysis
+
+7. What is the correlation between lifespan and gestation period? (Hint: there are some missing (`NA`) values here, you'll need to specify `use="complete.obs"` when performing your correlation test (see `?cor` for details)) Could you have guessed this from your plot in question 3?
+    ```{r}
+    # Show your R code here
+    # Write your answer here
+    ```
+    
+8. Compute the correlation matrix between total sleep, body weight, brain weight, life span and gestation. You'll need to subset your dataset to include only the above variables (Aside: you can get a `data.frame` with *only* `numeric` variables by using `df[sapply(x, is.numeric)]`).
+    ```{r}
+    # Show your R code here
+    ```
+  * Based on Pearson's correlation coefficient, which two variables are *most* and *least* correlated with each-other?
+    ```{r}
+    # Write your answer here
+    ```
+
+# Part II
+
+## Linear Regression
+
+9. Create a linear regression model with `TotalSleep` as a dependent variable and `BodyWt` as the independent variable.
+    ```{r}
+    # Show your R code here
+    ```
+
+  * What is the regression equation ($y = \beta_0 + \beta_1 x_1$)?
+    ```{r}
+    # Write your answer here
+    ```
+
+  * Is `BodyWt` a significant predictor of `TotalSleep`? What evidence do you have to support this?
+    ```{r}
+    # Show your R code here
+    # Write your answer here
+    ```
+
+  * Create a scatterplot for the model and add the regression line to the plot (Hint: you can add a regression line based on a fitted model using the `abline` function).
+    ```{r}
+    # Show your R code here
+    ```
+    
+10.	Create a linear regression model with `TotalSleep` as a dependent variable and `BrainWt` as the independent variable.
+    ```{r}
+    # Show your R code here
+    ```
+
+  * What is the regression equation ($y = \beta_0 + \beta_1 x_1$)?
+    ```{r}
+    # Write your answer here
+    ```
+
+  * Is `BrainWt` a significant predictor of `TotalSleep`? What evidence do you have to support this?
+    ```{r}
+    # Show your R code here
+    # Write your answer here
+    ```
+
+  * Create a scatterplot for the model and add the regression line to the plot.
+    ```{r}
+    # Show your R code here
+    ```
+
+11. Which of `BodyWt` and `BrainWt` was a better predictor of `TotalSleep`?
+    ```{r}
+    # Write your answer here
+    ```
+
+## Multiple Regression
+
+12. Fit a multiple regression model using total sleep as the dependent variable and body weight, brain weight, life span, and gestation period as the four independent variables.
+    ```{r}
+    # Show your R code here
+    ```
+
+  * What is the regression equation ($y = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \beta_3 x_3 + \beta_4 x_4$)?
+    ```{r}
+    # Write your answer here
+    ```
+    
+  * Which independent variables were deemed to be significant predictors in the model above?
+    ```{r}
+    # Write your answer here
+    ```
+    
+  * How have the regression coefficients changed from the models in the previous section to the multiple regression model above?
+    ```{r}
+    # Write your answer here
+    ```
+    
+13. Discussion Question: 
+  * Why is such a linear modelling framework, where we combine multiple independent (explanatory) variables such a valuable tool for analysing datasets encountered in geography?
+    ```{r}
+    # Write your answer here
+    ```
+
+### Reference
+
+This lab has been adapted from a lab developed by [Dr. Jed Long](http://jedalong.github.io) at the University of St. Andrews. The introduction comes from Rogerson's [Statistical Methods for Geography](https://study.sagepub.com/rogerson4e), [Chap. 7](https://study.sagepub.com/rogerson4e/student-resources/correlation).

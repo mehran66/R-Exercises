@@ -1,0 +1,522 @@
+---
+title: 'Lab 8: Spatial Regression and Poverty'
+author: "Merhan Ghandehari"
+output:
+  html_document:
+    self_contained: no
+---
+
+# Introduction
+
+The goal of these exercises is to give you a chance to put the concepts we have been discussing in class into practice. Keep in mind we have only a limited amount of time (one week this time!), so our focus for this lab will be *breadth* rather than *depth*!
+
+To get started, let's load some data. We're going to use the Southern Counties Data from [Voss (2006)](http://www.odum.unc.edu/content/pdf/Voss%20et%20al%202006.pdf), which we've been working with in class. There are two ways to get this data, the 'traditional' way (loading a shapefile), and the 'easy' way, loading a 'pre-packaged' dataset I have prepared for you:
+
+```{r message=FALSE}
+library(rgdal)
+soco = readOGR("Data/south00.shp", layer="south00")
+```
+```{r eval=FALSE}
+summary(soco@data)
+```
+
+If the above doesn't work, you can always get the data from here:
+
+```{r eval=FALSE}
+load("Data/soco.rdata")
+summary(soco@data)  # You might want to check this out
+```
+
+The data contains the following variables/information (this info is also available in the `vardescription_south00.csv` file). This dataset was originally used to examine intercounty variation in child poverty rates in the US. In particular, the authors used it as a way to demonstate the utility of spatial regression analysis.
+
+```{r echo=FALSE}
+metadata = read.csv("Data/vardescription_south00.csv")
+knitr::kable(metadata)
+```
+
+# Part I: Exploratory Spatial Data Analysis
+
+The response variable we are interested in is `PPOV`, which describes the proportion of children living in poverty in each county. So first things first, create a choropleth map that shows the distribution of `PPOV` across the sothern states:
+
+```{r message=FALSE}
+library(maptools)
+library(RColorBrewer)
+library(classInt)
+# Consider using quantiles class breaks, or a 'ramp-style' palette
+# Show R code to produce a choropleth map of PPOV
+
+# palette = colorRampPalette(c("lightblue", "darkblue"), space = "rgb")
+# spplot(soco, "PPOV", col.regions=palette(20), 
+#        main="Distribution of poverty across the sothern states")
+
+
+# Create Categories based on quantiles
+# cats7 = classIntervals(soco$PPOV, n=7, style="quantile")
+# pal7 = brewer.pal(7, "YlGnBu") 
+# seven_cols = findColours(cats7, pal7) 
+# plot(soco, col=seven_cols, lty=0)
+
+
+library(ggplot2)  # Plotting and stuff
+#soco@data$id <- as.numeric(rownames(soco@data))-1
+class(soco)  # Not a regular data.frame...
+new_map = fortify(soco, region="FIPS")
+class(new_map)  # Now we have a regular data.frame!
+new_map<-merge(new_map,soco@data,by.x="id",by.y="FIPS") 
+
+p = ggplot(data=new_map, aes(x=long, y=lat, group=group))
+p + geom_polygon(aes(fill=PPOV)) + coord_equal() + labs(x="Longitude", y="Latitude", title="Proportion of poverty across the sothern states")  + scale_fill_gradient('PPOV', low = "white", high = "red", space = "Lab", na.value = "grey50", guide = "colourbar")
+
+```
+
+`R` doesn't have a ton of fancy tools for mapping, but it does a pretty good job of quickly giving us the information we will need to do our due diligence on the relationships in our data. If this were a real project then we would need to undertake the above steps for all of our independent variables, but for now we will just proceed with `PPOV` (our response; done already) and `PFHH`. In addition to the plots, note if there is any observable spatial co-variation in these variables:
+
+```{r}
+# Show R code to produce choropleth map of PFHH variable
+p = ggplot(data=new_map, aes(x=long, y=lat, group=group))
+p + geom_polygon(aes(fill=PFHH)) + coord_equal() + labs(x="Longitude", y="Latitude", title="Proportion female-headed households across the sothern states")  + scale_fill_gradient('PPOV', low = "white", high = "red", space = "Lab", na.value = "grey50", guide = "colourbar")
+
+# Is there any notable co-variation in the above two variables
+# Yes, some similar paterns can be seen all over place
+```
+
+It is also always important to examine the underlying attribute distribution of your variables (i.e., via histograms, density plots, etc). Create histograms and any other relevant plots to give us an idea of the underlying distribution of the `PPOV` and `PFHH` variables from our dataset. What do you notice about these variables?
+
+```{r}
+# Show R code to produce histograms of the `PPOV` and `PFHH` variables
+g = ggplot( data = soco@data, aes( x = PPOV ))
+g + geom_histogram(bins = 50, col = 'blue') 
+
+g = ggplot( data = soco@data, aes( x = PFHH ))
+g + geom_histogram(bins = 50, col = 'blue') 
+
+# The variables PPOV and PFHH pretty much the same distribution
+```
+
+Now that we have an idea of the spatial and aspatial distribution of these variables, it is time to look at their relationships with each other. Create a scatterplot of `PPOV` with `PFHH` and note any potentially important relationships you observe:
+
+```{r}
+# Show R code to produce a scatterplot of `PPOV` with `PFHH`
+r = ggplot( data = soco@data, aes( x = PFHH, y = PPOV ))
+r + geom_point() 
+#There is a strong linear positive relationship between these two variable
+```
+
+Take the opportunity here to study the relationship between these two key variables. Now add a 'best fit' line to the plot (think `abline` function or `geom_abline` if you're using `ggplot`). What is the slope of this line?
+
+```{r}
+# Show R code to produce a scatterplot of `PPOV` with `PFHH` with a best fit line
+# What is the slope of the line? You'll need to fit a model here...
+PPOV_PFHH.lm = lm(soco@data$PPOV ~ soco@data$PFHH)
+coeffs = coefficients(PPOV_PFHH.lm); 
+#the slope of line is
+coeffs[2]
+
+r = ggplot( data = soco@data, aes( x = PFHH, y = PPOV ))
+r + geom_point() + geom_abline(aes(slope=coeffs[2],intercept=coeffs[1]), colour="red", size=0.9)
+```
+
+Obviously the two variables are positively and fairly strongly correlated. Does it look like there are any outliers here? How might you determine this (no need to show `R` code here, just make suggestions)?
+
+```{r}
+# How might you determine if there are outliers in the previous scatterplot?
+#yes, there are some points that are far form the fitted line. My suggetion is making a confidence interval aorund the fitted line or using the box plot
+boxplot(soco@data$PFHH)
+boxplot(soco@data$PPOV)
+# Also I ran the Bonferroni test to assesse Outliers. This test identify two outliers
+library(car) 
+outlierTest(PPOV_PFHH.lm)
+```
+
+Bonus: try to take a look at the state-specific relationships between `PPOV` and `PFHH`. Does this seem to capture any spatial effects?
+
+```{r}
+# Bonus: Show R code to produce conditional scatterplot of `PPOV` with `PFHH` for each state.
+# You'll probably need ggplot for this (facet_wrap)
+# In most of the states we can see that these variables are positively and fairly strongly correlated, but in KY, OK, TN, TX and WA correlation is quite weak. In DC and DE also we do not have enough data to make any conclusion.
+p = ggplot(data=new_map, aes(x = PFHH, y = PPOV))
+p + geom_point(size=.2, alpha = 0.2) + facet_wrap(~ STUSAB)
+```
+
+## OLS and Residuals
+
+At this point we should have a good feel for some of the descriptive characteristics in our data. There is obviously much more that could be done, but you should have the basic idea at this point. Since some of the things we should have done (Global and Local Spatial Autocorrelation) will be done later in the lab anyway, so we can safely skip over them here. For now though, `R` is just one more software program that will allow you to run a basic OLS Regression.
+
+### Spatial Weights
+
+Before we get started we need to define a spatial weights matrix. We won’t use it directly here (as we will when we run spatial regression), but `R`'s `spdep` allows us to compute Moran's I for our residuals as well as some other spatial diagnostics on the OLS so we do our matrix now rather than later.
+
+```{r message=FALSE}
+library(spdep)
+w_nb = poly2nb(soco, row.names=soco$FIPS, queen=TRUE)  # Use queen contiguity
+```
+
+Summarize the above neighbors list, and create a simple plot to show overall connectivity. Does this look about right? Which location is the most connected? Bonus: Can you tell me which county this is?
+
+```{r}
+# Show R code to summarize and plot the above neighbors list
+summary(w_nb)
+# Bonus: Which county is the most connected. Tell me the FIPS _and_ name...
+#The most connected reagion is Emanuel County in GA with 11 links
+
+library(spdep)
+map_crd <- coordinates(soco)
+plot(soco, pch=19, cex=0.1, col="grey", border=NA)
+plot(w_nb,coords=map_crd,pch=19, cex=0.1, lwd=0.2, col="red", add= TRUE)
+```
+
+This neighbors list is just one 'part' of weights matrix creation. Convert the above neighbors list into a proper weights object, using row standardised weights (`see ?nb2listw`):
+
+```{r}
+# Show R code to convert w_nb to a weights matrix (call it w_mat)
+w_mat <- nb2listw(w_nb, style="W", zero.policy=TRUE) # create a spatial weights matrix
+
+```
+
+### OLS Regression
+
+Now we'll fit an OLS Regression model (call it `mod1`) using the Southern Counties dataset. Firstly, the *dependent variable* will be the square root of the percentage of children living in poverty (`SQRTPPOV`), and your *independent variables* will include `PHSP`, `PFHH`, `PUNEM`, `PEXTR`, `P65UP`, `METRO`, `PHSPLUS`. Fow now, we'll ignore any possible interaction terms etc...
+
+What is the $R^2$ for this model? Are the coefficients all significant?
+
+```{r}
+# Show R code to fit an OLS Regression model with the above variables
+SQRTPPOV = sqrt((soco@data$PPOV))
+mod1 = lm(sqrt((PPOV)*100)  ~ PHSP + PFHH + PUNEM + PEXTR + P65UP + METRO + PHSPLUS, data = soco@data)
+summary(mod1)
+
+# What is the R^2 value? Are the coefficients significant?
+#The R^2 is 0.7797 that is considered quite high. The coefficients are also significant as they all have small p-value
+```
+
+This leaves us to interpret the various output statistics. Some things to pay attention to:
+* Log likelihood: higher, better, (less negative)
+* Aikake info criterion (AIC): lower, better
+* Others?
+
+These are all aspatial diagnostics and mostly they will give us information in a comparative sense. We should also look for multicollinearity; what is a good test for this (remember, multicolinearity inflates the standard errors (variance) of the coefficients)? Perform this test; is multicolinearity going to be a problem here?
+
+```{r}
+library(car)
+# Show R code to run a test for the effects (variance inflation) of multicolinearity
+# Evaluate Collinearity
+#The cuttoff is 2.5. So here we do not have collinear variables
+vif(mod1) # variance inflation factors 
+```
+
+What about heteroscedasticity (non-constant variance of the residuals)? There is a nice test for this too (`ncvTest` from the `car` package), is it significant here? Note: this test is sometimes also called the Breusch-Pagan test.
+
+```{r}
+# Show R code to run ncvTest and determine if it is significant
+# P-value is quite small and so the it is significant
+library(lmtest)
+bptest(mod1)
+ncvTest(mod1)
+```
+
+The potential problems we have with heteroskedasticity could be ameliorated by transforming some of our variables, and/or reducing the impact of certain outliers. Whether or not your discipline thinks this is appropriate statistical technique is up to you. For now we will leave this be, but recall from the lecture that heteroskedasticity is a violation of one of the key assumptions of OLS and its presence should throw into question the validity of your model.
+
+What about the residuals, are they normally distributed? What are some good ways to test this: visually and statistically (the `moments` package has some useful tests for this)?
+
+```{r}
+# R code to test for normally distributed errors (plot and/or test statistic)
+# based on this histgram the residuals nearly have a normal distribution
+library(MASS)
+sresid <- studres(mod1) 
+hist(sresid, freq=FALSE, 
+   main="Distribution of Studentized Residuals")
+xfit<-seq(min(sresid),max(sresid),length=40) 
+yfit<-dnorm(xfit) 
+lines(xfit, yfit)
+
+
+ #qq plot for studentized resid
+# Based on the qq plot the the residuals have a normal distribution. We have a set of outliers too.
+qqPlot(mod1, main="QQ Plot")
+
+#Null hypothesis residuals are normally distributed 
+# The null hypothesis can be rejected based on this test. But it seems this happened because there are some outliers.
+shapiro.test(resid(mod1))
+```
+
+### Diagnostics
+
+Now its time to decide if we need to pursue spatial regression models to counteract any of the issues we've observed so far. We can use Anselin's decision tree framework to help us here:
+
+Firstly, we'll explore Moran’s I calculated on the OLS residuals. In this example, what does this show?
+
+```{r}
+# Show R code to run a Global Moran's I test for residual spatial autocorrelation
+plot(residuals(mod1), fitted(mod1))
+lm.morantest(mod1,w_mat) #Moran's I test for residual spatial autocorrelation
+# The Moran's I value is 0.308 with very samll p-value and therefore significant. So the the residuals are correlated
+```
+
+We can also perform the Lagrange Multiplier tests. These help us to calculate the 'effectiveness' of the two forms of spatial regression model, along with their *robust* forms. The way we read this is we look to see if the lag LM is significant. Then we look at the error LM. If only one is significant then the metrics point to that type of model. If both are significant then we forget what we just read and pick the higher of the two robust scores. Run the `lm.LMtests` to help us decide which spatial regression model to use going forward:
+
+```{r}
+#  this test is significant
+lm.LMtests(mod1,w_mat, test="all")
+```
+
+### Residual Maps
+
+The Mississippi Delta, Appalachia, and to a lesser extent the U.S. Mexican border are all home to clusters of high residuals. On the plus side, we don't have any extreme outliers, so our model isn't performing too badly! Produce a quick map to show this spatial distribution:
+
+```{r}
+# Show R code to produce a basic map of residuals
+# Show R code to produce choropleth map of PFHH variable
+
+soco@data$res = resid(mod1)
+# palette = colorRampPalette(c("white", "red"), space = "rgb")
+# spplot(soco, zcol="res", col.regions=palette(20), main="Global Moran's I", pretty=T, edge.col = "transparent")
+
+new_map = fortify(soco, region="FIPS")
+class(new_map)  # Now we have a regular data.frame!
+new_map<-merge(new_map,soco@data,by.x="id",by.y="FIPS") 
+p = ggplot(data=new_map, aes(x=long, y=lat, group=group))
+p + geom_polygon(aes(fill=res)) + coord_equal() + labs(x="Longitude", y="Latitude", title="Global Moran's I")  + scale_fill_gradient('PPOV', low = "white", high = "red", space = "Lab", na.value = "grey50", guide = "colourbar")
+```
+
+A good way to *quantitatively* show clustering in the above residuals might be to plot the local spatial autocorrelation statistics (Gi\* or Moran's Ii). For **bonus** points, compute the local spatial autocorrelation of the above residuals and map them:
+
+```{r}
+# Bonus: compute local moran's Ii (or local getis and ord stat)
+# Map results to get an idea of local clustering in residuals
+lm1 = localmoran(resid(mod1),w_mat, zero.policy=TRUE)
+soco@data$local_moran = (lm1[, "Ii"]) 
+
+# palette = colorRampPalette(c("white", "red"), space = "rgb")
+# spplot(soco, zcol="local_moran", col.regions=palette(20), main="Local Moran's I", pretty=T, edge.col = "transparent")
+
+new_map = fortify(soco, region="FIPS")
+class(new_map)  # Now we have a regular data.frame!
+new_map<-merge(new_map,soco@data,by.x="id",by.y="FIPS") 
+p = ggplot(data=new_map, aes(x=long, y=lat, group=group))
+p + geom_polygon(aes(fill=local_moran)) + coord_equal() + labs(x="Longitude", y="Latitude", title="Local Moran's I")  + scale_fill_gradient('PPOV', low = "white", high = "red", space = "Lab", na.value = "grey50", guide = "colourbar")
+#####################
+
+soco@data$local_moran_Z1 = (lm1[, "Z.Ii"]) # z-scores
+# palette = colorRampPalette(c("white", "red"), space = "rgb")
+# spplot(soco, zcol="local_moran_Z1", col.regions=palette(20), main="Local Moran's I (z values)", pretty=T, edge.col = "transparent")
+
+new_map = fortify(soco, region="FIPS")
+class(new_map)  # Now we have a regular data.frame!
+new_map<-merge(new_map,soco@data,by.x="id",by.y="FIPS") 
+p = ggplot(data=new_map, aes(x=long, y=lat, group=group))
+p + geom_polygon(aes(fill=local_moran_Z1)) + coord_equal() + labs(x="Longitude", y="Latitude", title="Local Moran's I (z values)")  + scale_fill_gradient('PPOV', low = "white", high = "red", space = "Lab", na.value = "grey50", guide = "colourbar")
+#####################
+lm4 = localG(resid(mod1),w_mat, zero.policy=TRUE)
+soco@data$local_moran_Z1 = (as.numeric(lm4))
+# palette = colorRampPalette(c("white", "red"), space = "rgb")
+# spplot(soco, zcol="local_moran_Z1", col.regions=palette(20), main="Local Getis-Ord G* (z values)", pretty=T, edge.col = "transparent")
+
+new_map = fortify(soco, region="FIPS")
+class(new_map)  # Now we have a regular data.frame!
+new_map<-merge(new_map,soco@data,by.x="id",by.y="FIPS") 
+p = ggplot(data=new_map, aes(x=long, y=lat, group=group))
+p + geom_polygon(aes(fill=local_moran_Z1)) + coord_equal() + labs(x="Longitude", y="Latitude", title="Local Moran's I (z values)")  + scale_fill_gradient('PPOV', low = "white", high = "red", space = "Lab", na.value = "grey50", guide = "colourbar")
+```
+
+# Part II: Spatial Regression
+
+In this segment we will run spatial lag and spatial error models and compare the results we will also work at interpreting the models.
+
+We begin, as before with specifying our regression model design: `SQRTPPOV ~ PHSP + PFHH + PUNEM + PEXTR + P65UP + METRO + PHSPLUS`. We'll use the same weights matrix as before (`w_mat`), but this time we'll fit spatial lag and error models:
+
+```{r}
+# Show R code to fit a spatial lag (lag_mod) and a spatial error (err_mod) model
+
+lag_mod = lagsarlm (SQRTPPOV  ~ PHSP + PFHH + PUNEM + PEXTR + P65UP + METRO + PHSPLUS, data = soco@data, w_mat)
+summary(lag_mod)
+
+
+err_mod = errorsarlm (SQRTPPOV  ~ PHSP + PFHH + PUNEM + PEXTR + P65UP + METRO + PHSPLUS, data = soco@data, w_mat)
+summary(err_mod)
+
+```
+
+Now comes the fun part, interpreting our results. We can print the `summary()` results of all three model runs and explore the output. We have already started with the first model (OLS) and explored some spatial dependence diagnostics. Indeed, we have already seen that the LM's and robust LM's indicate we should prefer a spatial *lag* model over the spatial *error* model.
+
+Now let's compare the summary model diagnostics. The $R^2$ value is a bit 'iffy' with spatial models, so the log-likelihood and AIC are preferred. Which model appears to perform best in terms of model fit?
+
+```{r}
+# Show some R code to highlight which model fits best in terms of R^2, AIC, and log-likelihood
+lag_mod$AIC_lm.model
+lag_mod$logLik_lm.model
+
+# for lag model
+#Log likelihood: 2457.162
+#AIC: -4894.3
+
+# for error model
+#Log likelihood: 2504.829
+#AIC: -4989.7
+
+#AIC of spatial models is lower than the linear model, means a better model fit.
+
+#test value: 48.739, p-value: 2.9233e-12
+#LM test indicate there is a significant spatial autocorrelation in the residuals
+
+#So AIC and log-likelihood show that spatial models is better than a non-spatial linera model. Also it seems that error molde works better than log model due to the higher value of Log likelihood and lower value of AIC.
+```
+
+Turn next to the spatial autoregressive coefficients ($\rho$, spatial lag, or $\lambda$, spatial error). What is the value of Rho? Is it significant? What is its sign (positive or negative spatial autocorrelation)?
+
+```{r}
+# Show R code to get Rho (or just refer to earlier printout and state value)
+# Is it significant? What is its sign? What does this mean?
+lag_mod$rho
+#Rho: 0.334, LR test value: 266.95, p-value: < 2.22e-16
+#Rho is positive and highly significant; It means that there is spatial dependence in our data. By the way this value indicates a strong influence on observations by their neighboring observations.
+```
+
+Show the same for the error model. Which one seems to indicate stronger spatial autocorrelation? Is there a difference in the associated standar errors for these coefficients?
+
+```{r}
+# Show R code to get Lambda (or just refer to earlier printout and state value)
+# Is it significant? How does it compare to above value for Rho?
+err_mod$lambda
+#Lambda: 0.6607, LR test value: 362.28, p-value: < 2.22e-16
+#Lambda is positive and significant; It means there is spatial autocorrelation leads to residual dependence
+# Lambda is hgier than rho. We cannot compare this two parameters directly because Pho is a substantive parameter, but Lambda is a nuisance parameter
+```
+
+What about the LR and Wald tests? What do these suggest? How do they compare to ANOVA between the spatial regression models and the OLS model?
+
+```{r}
+# Show R code to compare models' LR and Wald tests (or refer to earlier printout)
+# How is this similar/dis-misimilar to an ANOVA test?
+# lag_mod
+# LR test value: 266.95, p-value: < 2.22e-16
+# Wald statistic: 278.04, p-value: < 2.22e-16
+#These are tests for the significance of the spatial term. LR test check to see if a spatial model is better than a non- spatial model. Here this test is significant and so a spatial model is better than a non- spatial model.
+
+# 
+# err_mod
+# LR test value: 362.28, p-value: < 2.22e-16
+# Wald statistic: 650.07, p-value: < 2.22e-
+#These are tests for the significance of the spatial error term. LR test is a test of the sinificance of the spatial term. As it is significant here, the spatial term improve the model. in this respect it is a equivalent to anova. Wald statistic is like testing a full and reduced model. It tests a model with and without the error term. Here it's significant; so spatial terms improve the model.
+```
+
+Look at other explanatory variables (signs and magnitudes). It looks like the `METRO` variable lost significance in the error model. What might this suggest? To get a better idea of the *impacts* that these models are capturing, take at look at the direct, indirect, and total impacts of the lag model:
+
+```{r}
+# R code to extract 'impacts' of the lag model (caution, very slow!)
+#Impacts of Lag Model
+#METRO has a small direct nad indirect impact in comparison to the other variables; So We may be able to eliminate this parameter from our model
+impacts(lag_mod, listw=w_mat)
+```
+
+How do the above impacts relate to the values from the OLS and error model?
+
+```{r}
+# Describe the key differences between the three models in
+# terms of coefficients
+# Reading coefficients in the spatial models is not straight forward. In OLS each coefficient can be diretly interpreted, but in spatial models it's more complicated. In the lag model one unit chage in one variable would influence the whole system. So, for interpreting these coefficient sth called spillover effects is used. Here one unit change can have some direct impacts in one location and some icdirect ompacts on the rest of the map. 
+```
+
+Our model *still* has major problems with heteroskedasticity. We would have to deal with this going forward. Consider a scatterplot that compares predicted values against residuals:
+
+```{r}
+# Show R code to produce a scatterplot to help us
+# compare predicted with residuals values from our
+# chosen model
+plot(resid(err_mod) ~ predict(err_mod))
+```
+
+What about a Breusch-Pagan test to look at heteroscedasticity? In addition to the measure we used earlier, we can use the `bptest.sarlm` function from the `spdep` package to look at heteroscedasticity in spatial models *specifically* (perform for both lag and error model and discuss significance):
+
+```{r}
+# R code to perform BP test on spatial regression models.
+# Are they significant?
+# p-value is quite small and BP test on both lag model and error model is significant. So we have heteroscedasticity in our spatial models.
+bptest.sarlm(lag_mod)
+bptest.sarlm(err_mod)
+
+```
+
+For bonus points, take a look at the remaining residual spatial autocorrelation. Is it significant?
+
+```{r}
+# Bonus: Compute global and local spatial autocorrelation in
+# the error model residuals.
+# Is the SA still significant?
+# Consider plotting the local spatial autocorrelation also...
+
+plot(err_mod$resid)
+hist(resid(err_mod))
+
+#map residuals
+soco@data$res = resid(err_mod)
+new_map = fortify(soco, region="FIPS")
+class(new_map)  # Now we have a regular data.frame!
+new_map<-merge(new_map,soco@data,by.x="id",by.y="FIPS") 
+p = ggplot(data=new_map, aes(x=long, y=lat, group=group))
+p + geom_polygon(aes(fill=res)) + coord_equal() + labs(x="Longitude", y="Latitude", title="residuals")  + scale_fill_gradient('PPOV', low = "white", high = "red", space = "Lab", na.value = "grey50", guide = "colourbar")
+
+#####################
+moran.test(resid(err_mod),w_mat, zero.policy=T) #Moran's I
+#So the resildiuals are not autocorrelated
+#####################
+lm4 = localG(resid(err_mod),w_mat, zero.policy=TRUE)
+soco@data$local_moran_Z1 = (as.numeric(lm4))
+# palette = colorRampPalette(c("white", "red"), space = "rgb")
+# spplot(soco, zcol="local_moran_Z1", col.regions=palette(20), main="Local Getis-Ord G* (z values)", pretty=T, edge.col = "transparent")
+
+new_map = fortify(soco, region="FIPS")
+class(new_map)  # Now we have a regular data.frame!
+new_map<-merge(new_map,soco@data,by.x="id",by.y="FIPS") 
+p = ggplot(data=new_map, aes(x=long, y=lat, group=group))
+p + geom_polygon(aes(fill=local_moran_Z1)) + coord_equal() + labs(x="Longitude", y="Latitude", title="Local Moran's I (z values)")  + scale_fill_gradient('PPOV', low = "white", high = "red", space = "Lab", na.value = "grey50", guide = "colourbar")
+########
+lm1 = localmoran(resid(err_mod),w_mat, zero.policy=TRUE)
+# Create a LISA Cluster Map
+# reference: http://isites.harvard.edu/fs/docs/icb.topic923307.files/R%20code%20for%20Lab%20Ex%206.txt
+
+quadrant <- vector(mode="numeric",length=1386)
+
+# centers the variable of interest around its mean
+cCMEDV = (lag.listw(w_mat,resid(err_mod))) - mean(resid(err_mod))
+#cCMEDV <- data.election$Bush_pct - mean(data.election$Bush_pct)  
+
+# centers the Z value local Moran's around the mean
+C_mI <- lm1[,4]  
+
+signif <- 0.1       
+# set a statistical significance level for the local Moran's
+
+quadrant[cCMEDV >0 & C_mI>0] <- 4      
+# these four command lines define the high-high, low-low
+# low-high and high-low categories
+
+quadrant[cCMEDV <0 & C_mI>0] <- 1      
+quadrant[cCMEDV <0 & C_mI<0] <- 2
+quadrant[cCMEDV >0 & C_mI<0] <- 3
+quadrant[lm1[,5]>signif] <- 0     
+# places non-significant Moran's in the category "0"
+
+brks <- c(0,1,2,3,4)
+colors <- c("white","blue",rgb(0,0,1,alpha=0.4),rgb(1,0,0,alpha=0.4),"red")
+plot(soco,border="lightgray",col=colors[findInterval(quadrant,brks,all.inside=FALSE)])
+box()
+legend("bottomright",legend=c("insignificant","low-low","low-high","high-low","high-high"),
+       fill=colors,bty="n",cex=0.7,y.intersp=1,x.intersp=1)
+title("LISA Cluster Map")
+```
+
+Stepping back a little, let's try and understand what these models have told us:
+
+* First, there are spatial processes at play in our data that we need to be thinking about---ignoring spatial autocorrelation of over 0.3 is not good practice!
+* Second, our diagnostics and output consistently favor a Spatial *Error* form as a means of capturing this spatial autocorrelation.
+
+This suggests that our processes are varying consistently across small areas, but that we are not likely seeing an active process of counties interacting with one another---so we don't need to talk about the movement of individuals across county lines as the source of this relationship---but we *are* more likely to have some combination of large scale regional processes and regionally varying missing variables.
+
+### Reference
+
+This lab has been adapted from a lab developed by [Chris Fowler](mailto:csfowler@uw.edu) from the University of Washington.
+
+
+----------------
+library(knitr)
+rmarkdown::render('ghandehari_lab8.Rmd')

@@ -1,0 +1,402 @@
+---
+title: "A `ggplot` cookbook"
+---
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(ggplot2)
+```
+
+Useful cheatsheet (pick Data Visualization Cheat Sheet):
+
+[![Link to Cheatsheet](https://www.rstudio.com/wp-content/uploads/2015/01/ggplot2-cheatsheet-21.png)](https://www.rstudio.com/resources/cheatsheets/)
+
+## Plots of one variable
+
+In this section we will:
+
+  * get started with ggplot2
+  * look at plots of one variable
+  * start with exploring the diamonds data set
+  
+One continuous variable
+
+  * histogram: `geom_histogram()`
+  * densities: `geom_density()`
+  * frequency plot: `geom_freqpoly()`
+
+One discrete variable
+
+  * barplot: `geom_bar()`
+  * pie plot: different coordinate system of barplot...
+  
+There are two important functions:
+
+  * `qplot`: similar to base plotting functions
+  * `ggplot`: use this one, its more powerful!
+
+### Let's have a look -- mpg data set
+
+Let's look at the `mpg` data set from `ggplot2`. It contains 234 observations about the fuel efficiency of 38 popular cars in 1999 and 2008.
+ 
+```{r eval=FALSE}
+?mpg
+str(mpg)
+```
+
+One continuous variable: the variable `hwy` is the highway miles per gallon.
+```{r eval=FALSE}
+# Note that we can 'save' a plot as an R object and edit or plot it later
+# We can then add layers later...
+g = ggplot( data = mpg, aes( x = hwy ))
+
+# qplot( x = hwy, data = mpg, geom = "histogram" )
+g + geom_histogram()
+
+# qplot( x = hwy, data = mpg, geom = "density" )
+g + geom_density()
+
+# qplot( x = hwy, data = mpg, geom = "freqpoly" )
+g + geom_freqpoly()
+```
+
+One discrete variable: here the variable `class` encodes the type of car.
+```{r eval=FALSE}
+gg = ggplot( data = mpg, aes( x = class ))
+
+# qplot( x = class, data = mpg, geom = "bar" )
+# we'll look at the pie plot later
+gg + geom_bar()
+```
+
+### Your turn!
+
+Let's have a look at the diamonds data set of `ggplot2`.
+
+  * around 54,000 rows which correspond to a diamond that was sold in 2008.
+  * 10 columns or variables which correspond to the characteristics
+  * data set originally from http://www.diamondse.info/
+
+Why diamonds?
+
+  * each diamond is unique, no mass product
+  * cannot check price online (as for most products)
+  * can have a look at a whole market
+  * [others have already](http://www.r-bloggers.com/visualization-series-using-scatterplots-and-models-to-understand-the-diamond-market-so-you-dont-get-ripped-off/) done lots of this for us!
+  
+Let's work with a random sub-sample of the data set because all 54,000 observations are a lot. This makes plotting faster:
+
+```{r}
+set.seed(8229228)  # We'll all use the same seed so things are reproducible
+diamonds.small = diamonds[ sample(1:nrow(diamonds), 10000), ]
+```
+
+Try the following:
+
+  * Draw a histogram of the price (variable `price`). Find out how to change the bin width!
+    * Try a bin width of $50...
+  * Try to plot the same histogram in log-scale. Do you note anything special?
+    * Make sure you change/remove the bin width!
+  * Are colors (variable `colour`) equally likely sold?
+  * What's strange about the variable `cut`?
+
+
+## Plots of two variables
+
+In this section we will:
+
+  * glimpse at grammar of graphics underlying ggplot2
+  * create plots with two variables
+  
+The 'gg' in `ggplot2` stands for 'grammar of graphics' which is based on Wilkinson's (2005) grammar of graphics.
+
+Idea: all the plots can be build from the same components:
+
+  * **data** set
+  * **geoms** (geometric object) -- visually representing observations
+  * **aes** (aesthetics) -- aesthetics properties of the geometric objects
+  * **scale** -- defining how the data is plotted
+  * **coordinate** system
+
+Examples:
+
+  * **geoms** (geometric object) -- visually representing observations
+    * points
+    * bars
+    * lines
+  * **aes** (aesthetics) -- aesthetics properties of the geometric objects
+    * size
+    * color
+    * shape
+  * **scale** -- define how the data is plotted
+    * continuous / discrete
+    * transform variables (e.g. x- / y-axis, aesthetics)
+  * **coordinate** system
+    * cartesian coordinates
+    * polar coordinates
+    
+Two continuous variables
+
+  * scatter plot: `geom_point()`
+  * scatter plot using jitter: `geom_jitter()`
+  * smoother: `geom_smooth()`
+
+Discrete x and continuous y
+
+  * boxplot: `geom_boxplot()`
+  * bar plot: `geom_bar(stat = "identity")`
+  
+Continuous function like time series
+  
+  * line plot: `geom_line()`
+  
+### Let's have a look -- mpg data set
+
+Two continuous variables: the variable `cty` is the city miles per gallon.
+
+```{r fig.height=3}
+r = ggplot( data = mpg, aes( x = hwy, y = cty ))
+
+# qplot( x = hwy, y = cty, data = mpg, geom = "point" )
+r + geom_point()
+```
+
+You might realize that the points are plotted on top of each other... we can fix this by adding some vertical and horizontal noise. Note that since the noise is random, the plot looks slightly different every time it is shown:
+
+```{r eval=FALSE}
+# qplot( x = hwy, y = cty, data = mpg, geom = "jitter" )
+r + geom_jitter()
+
+# qplot( x = hwy, y = cty, data = mpg, geom = "smooth" )
+r + geom_smooth()
+
+# We can add multiple layers!
+# qplot( x = hwy, y = cty, data = mpg, geom = c("jitter", "smooth") )
+r + geom_jitter() + geom_smooth()
+```
+
+Discrete x and continuous y:
+
+```{r eval=FALSE}
+w = ggplot(data = mpg, aes( x = class, y = cty ))
+
+# qplot( x = class, y = cty, data = mpg, geom = c("boxplot"))
+w + geom_boxplot()
+
+# qplot( x = class, y = cty, data = mpg, geom = c("bar"), stat = "identity" )
+w + geom_bar(stat = "identity")
+
+# sum(mpg$cty[mpg$class == "compact"])
+# sum(mpg$cty[mpg$class == "2seater"])
+# sum(mpg$cty[mpg$class == "pickup"])
+
+# We can add multiple layers!
+# qplot( x= class, y = cty, data = mpg, geom = c("boxplot")) + geom_jitter( alpha = 0.3 )
+w + geom_boxplot( ) + geom_jitter(alpha = 0.3) # Cool!
+# alpha makes the geom partially transparent
+```
+
+### Your turn!
+
+Let's look again at the random subsample `diamnods.small`.
+
+  * Find out what influences the `price` of diamonds.
+    * make a scatterplot of the variables `price` and `carat`.
+    * think about transforming the variables in order to obtain a linear relationship. Hint: search on-line for how to transform the variables.
+    * add a smoother to the scatterplot.
+    * let's do something to reduce the impact of overplotting. Make the points partially transparent
+    
+## Multiple layers and faceting
+
+In this section we will:
+
+  * look at multiple layers
+  * consider faceting or multi-panel conditioning plots
+  
+Add multiple layers
+
+```{r fig.height=3}
+# variable cty is the city miles per gallon
+ggplot(data = mpg, aes( x = hwy, y = cty)) +
+  geom_jitter() +
+  geom_smooth() +
+  geom_rug(sides = "bl", position = "jitter")
+```
+  
+Let's look at faceted (multi-panel) plots
+
+```{r fig.height=3}
+# subset of the mpg data set
+mpg.small = subset(mpg, manufacturer %in%
+                      c("ford", "land rover", "toyota",
+                      "chevrolet", "honda", "volkswagen"))
+ggplot(data = mpg.small, aes(x = hwy, y = cty)) +
+  geom_jitter() +
+  facet_wrap(~ manufacturer)
+```
+
+```{r fig.height=3}
+# variable cty is the city miles per gallon
+ggplot(data = mpg.small, aes(x = hwy, y = cty)) + 
+  geom_jitter() +
+  facet_grid(~ manufacturer)
+```
+
+```{r fig.height=3}
+# variable cty is the city miles per gallon
+# drv: f = front-wheel drive, r = rear wheel drive, 4 = 4wd
+ggplot(data = mpg.small, aes(x = hwy, y = cty)) +
+  geom_jitter() +
+  facet_grid(drv ~ manufacturer)
+```
+
+Let the axis limits vary across the panels. Careful, this can make comparisons hard!
+
+```{r fig.height=3}
+# variable cty is the city miles per gallon
+ggplot( data = mpg.small, aes( x = hwy, y = cty )) +
+  geom_jitter() +
+  facet_grid(drv ~ manufacturer, scales = "free")
+```
+
+### Let's have a closer look at the aesthetics
+
+In this section we will have a closer look at the aesthetics:
+  * size, shape, fill, color...
+  * and combine them
+
+#### size
+
+```{r fig.height=3}
+# displ. engine displacement, in litres
+ggplot(data = mpg, aes( x = hwy, y = cty, size = displ)) +
+  geom_jitter()
+```
+
+#### shape
+
+```{r fig.height=3}
+ggplot(data = mpg, aes( x = hwy, y = cty, shape = factor(cyl))) +
+  geom_jitter(size = 3)  # Set a fixed size for all points
+```
+
+#### fill
+
+```{r fig.height=3}
+gg = ggplot(data = mpg, aes( x = class, fill = drv ))
+gg + geom_bar()
+```
+
+#### color
+
+```{r fig.height=3}
+ggplot(data = mpg, aes( x = hwy, y = cty, color = factor(cyl))) +
+  geom_jitter(size = 3)
+```
+
+#### Combine them
+
+```{r fig.height=3}
+# nice, there is only one combined legend for shape and color
+ggplot(data = mpg, aes(x = hwy, y = cty, color = factor(cyl),
+                       shape = factor(cyl), size = displ)) +
+  geom_jitter()
+```
+
+### Themes
+
+Change the theme of a plot using `theme_...()`
+
+```{r fig.height=3}
+ggplot(data = mpg, aes( x = class, y = cty)) + 
+  geom_boxplot( aes(fill = class)) + 
+  geom_jitter( alpha = 0.4 ) + 
+  theme_bw()
+```
+
+```{r fig.height=3}
+ggplot(data = mpg, aes( x = class, y = cty)) + 
+  geom_boxplot( aes(fill = class) ) + 
+  geom_jitter( alpha = 0.4 ) + 
+  theme_classic()
+```
+
+```{r fig.height=3}
+ggplot(data = mpg, aes( x = class, y = cty)) + 
+  geom_boxplot( aes(fill = class)) + 
+  geom_jitter( alpha = 0.4 ) + 
+  theme_grey()
+```
+
+### Transform variables
+
+Log-transform the y-axis of the plot
+
+```{r fig.height=3}
+ggplot( data = diamonds.small, aes( x = carat, y = price )) +
+  geom_point( alpha = 0.3 ) +
+  scale_y_log10( breaks = seq(500, 19500, 1000) ) +
+  scale_x_log10()
+```
+
+Alternative: Log-transform the variable and plot the data afterwards
+
+```{r fig.height=3}
+ggplot(data = diamonds.small, aes(x = log10(carat), y = log10(price))) + 
+  geom_point(alpha = 0.3) +
+  scale_y_continuous(breaks = seq(2, 5, 0.15) )
+```
+
+What's the difference? Hint: Take a close look at the axis.
+
+### How to save a plot?
+
+The plot to be saved
+```{r eval=FALSE}
+ggplot(data = mpg, aes( x = class, y = cty)) + geom_boxplot() +
+  geom_jitter(alpha = 0.3)
+```
+
+Save the last plot which is on your screen
+
+```{r eval=FALSE}
+# Why does this work? The argument `plot` of the function
+# `ggsave()` is set to `last_plot()`. Check out the help file:
+# ?last_plot
+ggsave(filename = "cool-boxplot-I.pdf")
+```
+
+Plots which are saved in a object can be saved by ggsave().
+
+```{r eval=FALSE}
+v = ggplot(data = mpg, aes( x = class, y = cty )) + geom_boxplot( ) +
+  geom_jitter(alpha = 0.3)
+ggsave(filename = "cool-boxplot-II.png", plot = v)
+# Cool, `ggsave()` recognizes the output format!
+# (pdf, png, jpg, eps, svg)
+```
+
+Control the width & height and change the path
+
+```{r eval=FALSE}
+# saving the figure can be controlled by
+ggsave(filename = "cool-boxplot-III.jpg", plot = v,
+       width = 5, height = 4)
+
+# one can specify the path if we do not want to save
+# the plot in our working directory
+# ggsave(filename = "/path/of/figures/cool-boxplot-IV.jpg", plot = v)
+# ggsave(filename = "cool-boxplot-IV.jpg", plot = v,
+#        path = "/path/of/figures/")
+```
+
+Alternatively don’t forget print the plot
+
+```{r eval=FALSE}
+pdf("cool-boxplot-IV.pdf")
+print(v)
+dev.off()
+```
+
+## Reference
+
+This Cookbook was based on Nina Roth's and Claude Renaux's Seminar for Statistics originally developed at [ETH Zurich](http://www.stat.math.ethz.ch/).

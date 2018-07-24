@@ -1,0 +1,342 @@
+# Lab 6 Prep: Exploring Patterns in Weather Data
+
+```{r message=FALSE, results="hide", echo=FALSE, error=FALSE, warning=FALSE}
+# boilerplate
+library(mosaic)
+```
+
+## The concept of ggplot
+
+In ggplot2, the graphics are constructed out of layers. The data being plotted, coordinate system, scales, facets, labels and annotations, are all examples of layers. This means that any graphic, regardless of how complex it might be, can be built from scratch by adding simple layers, one after another, until one is satisfied with the result. Each layer of the plot may have several different components, such as: data, aesthetics (mapping), statistics (stats), etc.
+
+Besides the data (i.e., the pandas data frame from where we want to plot something), aesthetics and geometries are particularly important, and we should make a clear distinction between them:
+
+* Aesthetics are visual elements mapped to data;
+    * the most common aesthetic attributes are the x and y values, colour, size, and shape;
+* Geometries are the actual elements used to plot the data, for example: point, line, bar, map, etc.
+
+So, what does this mean in practice? Suppose we want to draw a scatter plot to show the relationship between the minimum and maximum temperatures on each day, controlling for the season of the year using colour (good for categorical variables), and the rain using size (good for continuous variables). We would map the aesthetics `x`, `y`, `color` and `size` to the respective data variables, and then draw the actual graphic using a `geometry` - in this case, `geom_point()`.
+
+Here are some important aspects to have in mind:
+
+* Not all aesthetics of a certain geometry have to be mapped by the user, only the required ones. For example, in the case above we didn't map the shape of the point, and therefore the system would use the default value (circle); it should be obvious, however, that `x` and `y` have no defaults and therefore need to be either mapped or set;
+* Some aesthetics are specific of certain geometries - for instance, `ymin` and `ymax` are required aesthetics for `geom_errorbar()`, but don't make sense in the context of `geom_point()`;
+* We can map an aesthetic to data (for example, `color=season`), but we can also set it to a constant value (for example, `colour="blue"`). There are a few subtleties when writing the actual code to map or set an aesthetic, as we will see below.
+ 
+## The syntax of ggplot
+
+A basic graphic in ggplot2 consists of initializing an object with the function `ggplot()` and then add the geometry layer.
+
+* `ggplot()` - this function is always used first, and initializes a ggplot2 object. Here we should declare all the components that are intended to be common to all the subsequent layers. In general, these components are the data (the `R` data frame) and some of the aesthetics (mapping visual elements to data, via the `aes()` function). As an example:
+
+    ```{r eval=FALSE}
+    ggplot(data = dataframe, aes(x=var1, y=var2, color=var3, size=var4))
+    ```
+
+* `geom_xxx()` - this layer is added after `ggplot()` to actually draw the graphic. If all the required aesthetics were already declared in `ggplot()`, it can be called without any arguments. If an aesthetic previously declared in `ggplot()` is also declared in the `geom_xxx` layer, the latter overwrites the former. This is also the place to map or set specific components specific to the layer. A few real examples from our weather data should make it clear:
+
+    ```{r eval=FALSE}
+    # This draws a scatter plot where season controls the colour of the point
+    ggplot(data=weather, aes(x=l.temp, y=h.temp, color=season) + geom_point()
+
+    # This draws a scatter plot but colour is now controlled by dir.wind (overwrites initial definition)
+    ggplot(data=weather, aes(x=l.temp, y=h.temp, color=season) + geom_point(aes(color=dir.wind))
+
+    # This sets the parameter colour to a constant instead of mapping it to data.
+    # This is outside aes()!
+    ggplot(data=weather, aes(x=h.temp, y=l.temp) + geom_point(color="blue")
+
+    # Mapping to data (aes) and setting to a constant inside the geom layer
+    ggplot(data=weather, aes(x=l.temp, y=h.temp) + geom_point(aes(size=rain), color="blue")
+
+    # This is a MISTAKE - mapping with aes() when intending to set an aesthetic.
+    # It will create a column in the data named "blue", which is not what we want.
+    ggplot(data=weather, aes(x=l.temp, y=h.temp) + geom_point(aes (color="blue"))
+    ```
+
+When learning the ggplot2 system, this is a probably a good way to make the process easier:
+* Decide what geom you need - [go here](http://docs.ggplot2.org/current/index.html), identify the geom best suited for your data, and then check which aesthetics it understands (both the required, that you will need to specify, and the optional ones, that more often than not are useful);
+* Initialize the plot with `ggplot()` and map the aesthetics that you intend to be common to all the subsequent layers (don't worry too much about this, you can always overwrite aesthetics if needed);
+* Make sure you understand if you want an aesthetic to be mapped to data or set to a constant. Only in the former the `aes()` function is used. 
+
+Although aesthetics and geometries are probably the most important part of ggplot2, there are more layers/components that we will be using often, such as scales (both colour scales and axes-controlling ones), statistics, and faceting. Now, let's make some plots using different geometries!
+
+## Plotting a time series
+
+### Smoothing curves
+
+We'll start by grabbing some weather data to work with. The dataset consists of daily records for several meteorological parameters, measured in the city of [Porto](http://en.wikipedia.org/wiki/Porto) over the year (2014). We have, then, 365 observations for each of the following 14 variables:
+
+Variable  | Description
+--------- | -------------------------------------------------------------------
+day_count | number of days passed since the beginning of the year  
+day       | day of the month  
+month     | month of the year  
+season    | season of the year  
+l_temp, h_temp, ave_temp | lowest, highest and average temperature for the day (in ºC)  
+l_temp_time, h_temp_time | hour of the day when l_temp and h_temp occurred  
+rain      | amount of precipitation (in mm)  
+ave_wind  | average wind speed for the day (in km/h)  
+gust_wind | maximum wind speed for the day (in km/h)  
+gust_wind_time | hour of the day when gust_wind occurred  
+dir_wind  | dominant wind direction for the day  
+
+We have already processed this data to some degree to make it easier to work with (see [this tutorial](http://theanalyticalminds.blogspot.pt/2015/02/part-2-data-preparation.html) for details).
+
+```{r message=FALSE}
+library(ggplot2)
+weather = read.csv("Data/weather_2014_mod.csv")
+weather$date = as.Date(weather$date)
+```
+
+```{r message=FALSE}
+# Time series of average daily temperature, with smoother curve
+# Create the base plot
+p = ggplot(weather, aes(x=date, y=ave.temp))
+# Add some annotations
+p = p + ggtitle ("Daily average temperature") +
+        xlab("Date") +
+        ylab ("Average Temperature ( ºC )")
+print(p)
+```
+
+This produces a blank plot, because we haven't yet added any geoms! We can do this without modifying `p` directly, which will also automatically 'print' the plot:
+
+```{r}
+# Add some geoms (without overwriting p)
+p + geom_point() + geom_smooth()
+```
+
+Instead of letting ggplot use a default color for the points, we can map their color to the value of the temperature itself, using the `aes()` function. Moreover, we can define the color gradient we want -- in this case, I specified that cold days should be blue and warm days red. We forced the gradient to go through green, and pure green should occur when the temperature is 16 ºC. There are many ways to work with color, and it would be impossible for us to cover everything, but here is a quick example:
+
+```{r message=FALSE}
+# Same but with colour varying, and this time,
+# we don't need to specify the base plot and annotations
+p + geom_point(aes(color=ave.temp)) +
+    scale_colour_gradient() + 
+    geom_smooth()
+```
+
+The smoother curve (technically a loess) drawn on the graphs above shows the typical pattern for a city in the northern hemisphere (i.e., higher temperatures in July (summer) and lower in January (winter)).
+
+### Analysing the temperature by season 
+
+#### Exploring density
+
+```{r message=FALSE}
+# Distribution of the average temperature by season - density plot
+# We create a new base plot because we are using different aesthetics
+p = ggplot(weather, aes(x=ave.temp, fill=season)) +
+  geom_density(alpha=0.5) +
+  ggtitle ("Temperature distribution by season") +
+  xlab("Average temperature ( ºC )") +  ylab ("Probability")
+p
+```
+
+Spring and autumn seasons are often seen as the transition from cold to warm and warm to cold days, respectively. The spread of their distributions reflect the high thermal amplitude of these seasons. On the other hand, winter and summer average temperatures are much more concentrated around a few values, and hence the peaks shown on the graph.
+
+### Analysing  the correlation between low and high temperatures
+
+#### Scatterplots
+
+```{r message=FALSE}
+# Scatter plot of low vs high daily temperatures, with a smoother curve for each season
+p = ggplot(weather, aes(x=l.temp, y=h.temp)) +
+  geom_point(color="firebrick", alpha=0.5) + 
+  geom_smooth(aes(color=season), se=FALSE, size=1.1) +
+  ggtitle ("Daily low and high temperatures") +
+  xlab("Daily low temperature ( ºC )") +  ylab ("Daily high temperature ( ºC )") 
+p
+```
+
+The scatter plot shows a positive correlation between the low and high temperatures for a given day, and it holds true regardless of the season of the year. This is a good example of a graphic where we set an aesthetic for one geom (point color) and mapped an aesthetic for another (smoother curve color).
+
+## Exploratory data analysis
+
+Now, we will continue to rely on visualizations to explore the data, but with the goal of tackling the following question: "Are there any good predictors, in our data, of the occurrence of rain on a given day?" The numeric variable representing the amount of rain will be our response variable, and all the remaining variables will be potential explanatory variables (predictors).
+
+After framing the question, and before fitting any model, EDA techniques (such as visualization) are used to gain insight from the data. Here are the steps that a data analyst might take at this stage:
+
+* Analyse the (continuous) dependent variable
+    * Make an histogram of the distribution
+    * Plot the variable against time to see the trend (when applicable)
+    * Can the continuous variable be transformed to a binary one (i.e., did it rain or not on a particular day?), or to a multicategorical one (i.e., was the rain none, light, moderate, or heavy on a particular day?).
+* Search for correlations between the response variable and the continuous explanatory variables
+    * Are there any strong correlations? Are they linear or non-linear?
+* Try to *control for* other variables (faceting in ggplot2 is very useful here), in order to assess for confounding and effect modification.
+    * Does the association between two continuous variables hold for different levels of a third variable, or is modified by them?
+    * Example: If there is a strong positive correlation between the rain amount and the wind gust maximum speed, does that hold regardless of the season of the year, or does it happen only in the winter?
+* Search for associations between the response variable and the categorical explanatory variables
+    * Does the mean or median of the dependent variable change depending on the category of the categorical variable?
+    * What about the outliers, are they evenly distributed across all levels, or seem to be present in only a few of them? 
+
+Now, let's now do some analyses with the above framework in mind.
+
+### Exploring the dependent variable
+
+#### Daily rain amount
+
+ Time series of the daily rain amount, with smoother curve
+
+```{r message=FALSE}
+p = ggplot(weather, aes(date, rain)) +
+  geom_point(aes(color=rain)) +
+  geom_smooth(color="blue", size=1) +
+  scale_colour_gradient() +
+  xlab("Date") + ylab("Rain (mm)") +
+  ggtitle("Daily rain amount")
+print(p)
+```
+
+```{r message=FALSE}
+# Histogram of the daily rain amount
+p = ggplot(weather, aes(rain)) + 
+  geom_histogram(binwidth=1) +
+  xlab("Rain (mm)") + ylab ("Frequency (days)") +
+  ggtitle("Daily rain amount distribution")
+print(p)
+```
+
+The time series plot shows that the daily rain amount varies wildly throughout the year. There are many dry days interspersed with stretches of consecutive wet ones, often severe, especially in the autumn and winter seasons. The histogram not only confirms what was said above, but also shows that the distribution is extremely right-skewed. As shown below, both informally (comparing the mean to the median), and formally (calculating the actual value), the positive skewness remains even after removing all the days where it did not rain. 
+
+It should be clear at this point that one possible approach would be to dichotomise the dependent variable (rain vs. no rain).  Note that it is common to consider days with rain only those where the total amount was at least 1mm (to allow for measurement errors), and that's the criterion we will adopt here. Here is the code to do it and a few interesting summaries.
+
+```{r}
+# Create binary outcome (rained = {Yes, No})
+# Number of dry days
+nrow(subset(weather, rain == 0))
+
+# Number of days that will also be considered dry days
+nrow(subset(weather, rain <1 & rain >0))
+
+# The new binary variable is called "rained"
+weather$rained <- ifelse(weather$rain >= 1, "Yes", "No")
+
+# Dry and wet days (absolute)
+table(rained=weather$rained)
+
+# Dry and wet days (relative)
+prop.table(table(rained=weather$rained)) 
+```
+
+Porto is one of the wettest cities in Europe for a reason. There was rain in exactly 40% of the days of the year, and this is considering those days with rain < 1mm as dry. Should we set the cutoff at 0 mm, and more than 50% of the days in 2014 would have been considered wet.
+
+## Association between rain and season of the year
+
+The time series plot seems to indicate that season of the year might be a good predictor for the occurrence of rain. Let's start by investigating this relation, with the new binary one rain variable, `rained`. But first, we'll take a look at the variation by season via a boxplot.
+
+### Rain amount (continuous) by season
+
+```{r message=FALSE}
+# Boxplot - Rain amount by season 
+# Autumn, Spring, Summer, Winter
+p = ggplot(weather, aes(season, rain)) +
+  geom_boxplot() +
+  ylab("Season") + xlab("Rain (mm)") +
+  ggtitle("Daily rain amount by season")
+print(p)
+```
+
+We can see that most of the extreme values (outliers) are in the winter and autumn. There are still, however, many dry days in both these seasons, and hence the means are too close from each other. Fitting a model to predict the actual amount of rain (not the same as probability of occurrence) based on the season alone might not give the greatest results.
+
+### Rain occurrence (binary) by season
+
+```{r message=FALSE}
+# Bar plot - dry and wet days by season (relative)
+p = ggplot(weather, aes(season)) +
+  geom_bar(aes(fill=rained), position="fill") +
+  xlab("Season") + ylab ("Proportion") +
+  ggtitle("Proportion of days without and with rain, by season")
+print(p)
+```
+
+It appears that, when it comes to calculate the likelihood of raining on a particular day, the season of the year may have some predictive power. This is especially true for the winter season, where the rainy days (63%) are well above the yearly average (40%).
+
+```{r}
+sum(weather$rained == "Yes") / length(weather$rained) * 100
+```
+
+## Looking at the correlations between rain all numeric variables
+
+We are now going to calculate the linear (Pearson) correlations between the continuous outcome variable (daily rain amount) and all the numeric variables.
+
+Note that we are not modelling at this stage, just trying to gain some insight from the data, and therefore we are neither concerned about whether the correlations are significant (p-values and/or confidence intervals) nor if the the relation between any two variables is in fact linear.
+
+```{r}
+weather.num <- weather[c("day.count", "day", "month", "l.temp", "h.temp", "ave.temp",
+                         "rain", "ave.wind", "gust.wind", "l.temp.hour")] 
+round(cor(weather.num), 2)
+```
+
+There seems to be a promising positive correlation between the rain amount and the wind variables, especially the wind gust maximum speed (moderate correlation value of 0.61) , i.e., higher wind speeds tend to be associated with higher amounts of precipitation. Always bear in mind that correlation does not imply causation, therefore while it is true that the wind correlates with rain, this does not necessarily mean that the wind itself is causing the rain. It could actually be the other way around or, what is very common, both of the variables are caused by a third one that we are not even considering.
+
+There are also some negative correlations with the temperatures (especially the daily high) that, even though not as strong as the wind ones, are still worth looking at. It appears higher amounts of rain are correlated with lower high temperatures. But let's think about it for a minute: we saw that it is in the winter when it rains the most, and we also saw that the temperatures were lower in the winter. Here is an example of a potential (yet to be confirmed) interaction with a third variable: it may not be the lower temperature by itself that causes more rain, but the fact the both the precipitation and lower temperatures tend to occur during a specific period of the year.
+
+Since the season seems to have an impact on these variables, we would like to explore it a bit further, calculating all these correlations by season and checking whether the values hold. If the correlation between rain and some other variable is very dissimilar across all seasons, then there is the proof for an interaction. We will leave this exploration for a future lab or assignment.
+
+## Looking deeper at the wind and rain correlation
+
+### Faceting technique
+
+The idea of faceting (also called Trellis plots) is a simple but important one. A graphic, of any type and mapping any number of variables, can be divided into several panels, depending on the value of a conditioning variable. This value is either each of the levels of a categorical variable, or a number of ranges of a numeric variable. This helps us check whether there are consistent patterns across all panels. In ggplot there are two functions to create facets - `facet_wrap()` and `facet_grid()` - that are used when we have one or two conditioning variables, respectively. As everything in ggplot, this is just another layer in the plot, which means all geometries, mappings, and settings will be replicated across all panels.
+
+Let's then assess the linearity of the correlation of the amount of rain and the maximum wind gust speed, conditioning on the season of the year.
+
+```{r message=FALSE}
+# Amount of rain vs. wind, by season
+p = ggplot(weather, aes(gust.wind, rain)) +
+  geom_point(color="firebrick") +
+  geom_smooth(size=0.75, se=FALSE) +
+  facet_wrap(~season) +
+  xlab("Maximum wind speed (km/h)") +
+  ylab ("Rain (mm)") +
+  ggtitle("Amount of rain vs. maximum wind speed, by season")
+print(p)
+```
+
+This plot confirms what we had already discovered: there is a positive correlation between rain and wind, and the association holds regardless of the season. But now we know more: this correlation is non-linear. In fact, if we were to generalize, we could say there is no correlation at all when the maximum wind speed is below 25 km/h. For values higher than that, there seems to be a linear association in the autumn and winter, not so linear in the spring, and definitely non-linear during the summer. If we wanted to model this relation, we would either fit a non-linear model or we could try to model it using polynomials.
+
+## Occurrence of rain 
+
+###  More complex faceting to visualise variable association
+
+To finish this exercise, let's check whether the variable that seemed to have some predictive power for the amount of rain (maximum wind speed), is also good in the case of a binary outcome (occurrence of rain). Now we will not only control for the season, but also for the daily high temperature (because, as we have seen before, this variable was interacting with both the rain and the season). We will do this simultaneously, using the faceting technique on two variables. But, since the daily high temperature variable is continuous, we need to transform it to categorical first. A common strategy is to split the continuous variables in four groups of (roughly) the same size, i.e., the quartiles. This is very simple to do in R, combining the `cut()` and `quantile()` functions respectively.
+
+```{r}
+# Using the defaults of the quantiles function returns 4 intervals (quartiles)
+quants = quantile(weather$h.temp)
+quants
+
+# All we need to do is to define the quartiles as the breaks of the cut
+# function, and label the intervals accordingly
+weather$h.temp.quant = cut(weather$h.temp, breaks=quants,
+                           labels=c("Cool", "Mild", "Warm", "Hot"),
+                           include.lowest = TRUE)
+table(weather$h.temp.quant)
+```
+
+```{r warning=FALSE}
+# Occurrence of rain, by season and daily high temperature 
+p = ggplot(weather, aes(rained, gust.wind)) +
+  geom_boxplot(aes(color=rained)) +
+  facet_grid(h.temp.quant ~ season) +
+  xlab("Occurrence of rain") +
+  ylab ("Maximum wind speed (km/h)") +
+  ggtitle("Occurrence of rain, by season and daily high temperature")
+print(p)
+```
+
+The graph reveals a clear pattern: the median of the maximum wind speed is always higher when it rains, and this is not affected by the range the of daily high temperature, even after controlling for the temperature variation within each season of the year.
+
+We now have a much better understanding of the data. We know which variables matter the most, and which ones seem to be useless, when it comes to predicting rain; both the actual amount or the probability of its occurrence. Please note that it would be impossible to write about the analysis of every single variable and show every plot; behind the scenes, we would have done much more work than this get to where we are now...
+
+## More!
+
+If you want more `ggplot` practice, try [this tutorial](http://tutorials.iq.harvard.edu/R/Rgraphics/Rgraphics.html), which takes you through the steps required to reproduce the following graphic from the Economist:
+
+![Economist Graphic](http://tutorials.iq.harvard.edu/R/Rgraphics/images/Economist1.png)
+
+### Reference
+
+This demo is based on a [series of tutorials](http://theanalyticalminds.blogspot.com/2015/03/part-3a-plotting-with-ggplot2.html) by [Pedro M](http://theanalyticalminds.blogspot.com).
+

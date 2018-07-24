@@ -1,0 +1,293 @@
+---
+title: 'Lab 4: Policing in the News'
+output: html_document
+---
+
+## Introduction
+
+Recently there have been nationwide protests, triggered by events in Ferguson, MO, that have challenged common police practices. The police argue that individuals and neighborhoods are targeted because certain "types" of people are more likely to engage in criminal activity. This type of profiling and the tactics used by police have come under intense public scrutiny. Sophisticated statistical analyses ([Gelman et al. 2007](http://www.stat.columbia.edu/~gelman/research/published/frisk9.pdf)) report that in New York City racial minorities are stopped disproportionately by police (even *after* accounting for local variations in crime rates and prevalence of different groups to be caught for committing crime). The central question, in statistical debates is, "are the police acting based upon data or racial/cultural bias"?
+
+Many cities have started to publish crime statistics. These allow citizens to see limited information about each crime recorded by the city's police department, typically the location, date, and type of crime. The public discourse around police use of profiling (and physically aggressive tactics) often lacks nuance. On the one hand it seems reasonable to expect police to use data to inform their strategies and tactics, on the other hand its seems entirely unjust to target individuals and places (with force that may be excessive) simply because of their racial and/or econmoic characteristics.
+
+In this lab you will tackle the following questions:
+
+* At the neighborhood level does one type of profile apply to all types of crimes?
+* Does the neighborhood (tract) “profile” for crime vary for different types of crimes? 
+* Are certain neighborhood-level attributes routinely associated with crime prevalence?
+
+In this lab you will be using crime data, provided by the city of Chicago and Census Tract Level data from the American Community Survey. [Download data here](https://www.dropbox.com/s/xe77fjd0i4lypf8/Data.zip?dl=1). A few words of caution, [multicollinearity](https://en.wikipedia.org/wiki/Multicollinearity) may be a major and unavoidable problem in your analysis. This makes it difficult to directly compare model coefficients. A conservative approach to multicollinearity is to structure models in such a way that you never have to directly interpret coefficients. For example, only talking about the model in the aggregate ("the $R^2$ for model 2 is better than the one for model 1"). However, this is unsatisfying and difficult to communicate to policy makers. An alternative approach, that is slightly less conservative, is to control multicollinearity as much as possible and discuss the significance and sign of individual coefficients (but not their magnitudes). How you present your models is a matter of personal judgement.
+
+## Getting staring
+
+The data we will be working with is inherently spatial, the tract-level data from both the city and the Census describes places. Thus maps are a convenient way to visualize both the inputs and outputs to our analysis. Visualizing spatial data is fairly easy in `R`, however making a proper map (with marginalia) is really time consuming. We will be "mapping" things in `R`, but this term is used quite loosely; the basic maps made in this lab would make most properly trained cartographers squirm and avert their eyes!
+
+We have to load a few libraries for handling and visualizing spatial data.
+
+```{r warning=FALSE, message=FALSE}
+library(maptools)  # Guess what this packahe is for?
+# Load a map and data for Chicago
+# These are stored in the "shapefile" format
+chicago = readShapePoly("Data/ChicagoCrime.shp")
+```
+
+The chicago object you just created is a `SpatialDataFrame`, this is a type of `R` object that contains spatial data (points, lines, or polygons) and the attributes of each element in the data. Working with spatial data frames is slightly different from working with regular data.frames, spatial data.frames have a lot of different pieces. You can see these pieces by typing `head(chicago)` but this gives reams of hard to digest output. `SpatialDataFrames` are organized using a series of 'slots' to hold data, geometry, projection, and other information necessary for drawing maps. You can see the names of these slots by typing `slotNames(chicago)`.
+
+`SpatialDataFrames` have special behavior, if you use the `plot()` function they draw a map. This map only shows the outlines of the polygons (or points/lines) that contain data. Visualizing data on the map requires a few more steps (see below).
+
+```{r warning=FALSE, message=FALSE}
+plot(chicago)
+```
+
+If you want to see only the data you have to access the 'data' slot. This is done using the `@` symbol and typing the name of the slot you want to access. For example, `chicago@data` provides access to the data.frame describing all census tracts in Chicago. You can work with `chicago@data` just like you would work with a regular data.frame (Note: you might want to create a separate `chdata` data.frame object by doing `chdata = chicago@data` later).
+
+One of the things you'll immediately notice about the Chicago data is that the column names are all truncated to 10 characters. This makes it very hard to understand what each variable stores. This is a legacy of the shapefile format, which (stupidly) is incapable of storing column names of more than 10 characters. We'll rename the columns so it's easier to tell what we are working with. You can print the list of variable names for any data frame by typing `names(df_name)`.
+
+```{r}
+# Read in a readable list of variable names (this was created by hand).  
+# Note the use of ":" as a column delimiter...
+# If names are too verbose for your liking edit them in the text file prior to importing
+var_names = read.table("Data/Variable Descriptions.txt", sep=":", strip.white=TRUE)
+
+# Attach the modified names to the chicago data
+names(chicago@data) = as.character(var_names[, 2])
+```
+
+## Making Maps in R
+
+Drawing a map in `R` is way more complicated than it needs to be. This lab will present a simple method for making thematic maps, this method, because it is simple, doesn't allow nuanced control of visual variables. The most robust methods for creating maps involve the use of the package `lattice` and the function `spplot()` or the use of the `ggplot` library and the `fortify()` function (We'll learn more about `ggplot` in future labs).
+
+(**Note**: You may encounter some trouble using the `fortify()` function. If running `fortify()` returns a permission error message, you'll need to install and load an additional package, `rgeos`, to get it working properly. Ask your TA if you need assistance with this.)   
+
+The process for making simple maps in `R` is as follows:
+
+* Choose a variable to map, divide that variable into categories (typically 3-7 categories are used for thematic maps). For example a variable like `income` could be divided into categories `for 0-$10,000; $10,000-$20,000; $20,000-$30,000` and so on. To do this use function `cut` or `classIntervals`, in this lab we will use `classIntervals`.
+* Choose a palette that has the same number of colors as the variable does categories. If you created 4 income groups choose a palette with 4 colors. To aid in color selection we will use the `RColorBrewer` library (which is based on the famouse [ColorBrewer website](http://colorbrewer2.org)).
+* Attach the colors to the categories and draw the map.
+
+```{r message=FALSE, warning=FALSE}
+library(classInt)  # Library for creating clases
+# Create Categories based on quantiles
+cats7 = classIntervals(chicago$Number_of_violent_crimes, n=7, style="quantile")
+```
+
+Now we have to choose a color to use to describe the categories.
+
+```{r message=FALSE, warning=FALSE}
+library(RColorBrewer)
+# Display all palettes
+# display.brewer.all() 
+
+# Lets use this one
+# display.brewer.pal(7, "YlGnBu")
+
+# Save palette as an object
+pal7 = brewer.pal(7, "YlGnBu") 
+```
+
+The last step is to attach the palette to the categories and draw the map.
+
+```{r}
+seven_cols = findColours(cats7, pal7) 
+
+# Draw map using specificed data and colors
+# lty=0 (line type) turns off tract borders
+plot(chicago, col=seven_cols, lty=0)
+```
+
+1. In thinking about the previous map, what can we do to reduce the impact of plotting potential outliers (think in terms of density and variation in populations)?
+    * Create a crime density map. What variables are required here?
+    ```{r}
+    # Show your R code here
+    ```
+    * Why is density a potentially more useful way to visualize crime?
+    ```{r eval=F}
+    "
+    Write your answer here. (Notice how R allows you to write extended comments between a set of double quotes. You'll see R code chunks requiring free-response answers formatted this way for the rest of the lab. This should save you the hassle of having to use a hashtag to start each new line!)
+    "
+    ```
+
+2. The next thing we want to do is *explore* our data more. Start by taking a look at the distribution of the variable `Number_of_violent_crimes`. What do you notice? Are there any outliers?
+    * Create a plot that will help to identify outliers.
+    ```{r}
+    boxplot(chicago@data$Number_of_violent_crimes)
+    ```
+    * What might be reasons for these outliers (list some)?
+    ```{r eval=F}
+    "
+    Write your answer here
+    "
+    ```
+    * Create a new variable called `adj_violent_crimes` that 'adjusts' for potential outliers.
+    ```{r}
+    chicago$adj_violent_crimes = sqrt(chicago$Number_of_violent_crimes)
+    ```
+    * Square root transforms (used above) are one means of transforming the response variable. Try several alternative transformations (log, exp, etc) and examine the distribution of the transformed response variable. Choose one that you feel performs most effectively and reassign it to `chicago$adj_violent_crimes`. (It's fine to keep the square root transform, but justify the choice if you do).
+    ```{r}
+    # Show your R code here. 
+    ```
+    * Explain why you chose the adjustment you did (choose one of `sqrt`, `log`, or `exp`).
+    ```{r eval=F}
+    "
+    Write your answer here
+    "
+    ```
+
+## Multiple Regression
+
+Now we want to fit models to predict the association between neighborhood level socioeconomic characteristics and crime. This is an academic exercise but it reflects many real world situations, where one is faced with a large set of potential models to answer a somewhat vague policy/empirical question.
+
+For example, the model below (which has an adjusted R-square of about 0.5), has a selection of variables that *might* be associated with the prevalence of violent crime:
+
+```{r}
+mod1 = lm(adj_violent_crimes ~ Population_Density + 
+          Percent_of_children_in_single_female_headed_household + 
+          Percent_of_households_with_no_car +  
+          Percent_Less_than_High_School_Education_ + 
+          Percent_with_a_Graduate_Degree_ + 
+          Percent_Black_Alone +
+          Median_House_Value +
+          Median_Rent_ +
+          Income_Gini_Coefficient_,
+          data=chicago@data)
+```
+
+3. It is important to do diagnostics on the model to make sure that it is not violating any key assumptions.
+  * Produce a histogram and scatterplot of the above model's residuals.
+    ```{r}
+    hist(resid(mod1))
+    plot(resid(mod1) ~ predict(mod1))
+    ```
+  * Are there any major issues that we should be concerend about?
+    ```{r eval=F}
+    "
+    Write your answer here
+    "
+    ```
+
+4. It's also useful to check for spatial patterns in the residuals from the model. Is the model performing well in some areas but not in others? To do this we'll have to map the residuals.
+    * Produce a map of model residuals similar to the first map of the response variable. This time, use the 'jenks' classification style, and the `"YlOrRd" color palette (with 5 classes).
+    ```{r}
+    # Show your R code here
+    ```
+    * Your plot should look something like this:
+    ```{r echo=FALSE}
+    # Jenks categories of residuals
+    cats5 = classIntervals(resid(mod1),  n=5, style="jenks")
+    
+    # Five class color palette
+    pal5 = brewer.pal(5, "YlOrRd") 
+    
+    # Attach colors to categories
+    five_cols = findColours(cats5, pal5)
+    
+    # Plot map
+    plot(chicago, col=five_cols, lty=0)
+    ```
+    * Do the residuals seem spatially random?
+    ```{r eval=F}
+    "
+    Write your answer here
+    "
+    ```
+    * To give you something to compare to, if we omit most variables from the model we will see spatial patterns in the residuals, as shown below for the model `adj_violent_crimes ~ Population_Density`:
+    ```{r}
+    # Basic model
+    m = lm(adj_violent_crimes ~ Population_Density, data=chicago@data)
+
+    # Jenks categories of residuals
+    cats5 = classIntervals(resid(m),  n=5, style="jenks")
+    
+    # Five class color palette
+    pal5 = brewer.pal(5, "YlOrRd") 
+    
+    # Attach colors to categories
+    five_cols = findColours(cats5, pal5)
+    
+    # Plot map
+    plot(chicago, col=five_cols, lty=0)
+    ```
+    
+When the residuals from a model show clear spatial patterns there is evidence of some sort of missing variable, this is sometimes called 'model mispecification'. The patterns in the model residuals suggest some variable or variables, missing from the model, are strongly related to the outcome of interest. For example, the plot shown below plots the residuals from the minimalist model above against percent African-American. Two things are striking in this plot:
+
+  * Chicago is a highly segregated city, most tracts are either more than 80% black or less than 20% black.
+  * The model tends to overpredict in places with a low percent African-American and underpredict in places with a high proportion African-American.  
+    ```{r echo=FALSE}
+    plot(chicago@data$Percent_Black_Alone, resid(m), xlab="Residuals", ylab="Percent Black Alone")
+    abline(h=0, col="red", lwd=2)
+    ```
+
+It's also important to check models for multicollinearity. This is done by calculating the Variance Inflation Factor (VIF) as follows:
+
+```{r}
+mod1 = lm(adj_violent_crimes ~ Population_Density + 
+          Percent_of_children_in_single_female_headed_household + 
+          Percent_of_households_with_no_car +  
+          Percent_Less_than_High_School_Education_ + 
+          Percent_with_a_Graduate_Degree_ + 
+          Percent_Black_Alone +
+          Median_House_Value +
+          Median_Rent_ +
+          Income_Gini_Coefficient_,
+          data=chicago@data)
+
+library(car)
+vif(mod1)
+```
+
+5. The VIFs for female headed households, less than high school education, and percent black alone are not good. However, VIF 'cutoffs' are subjective...
+  * Go online and research a good/common 'cutoff' for VIF measures and provide your source. Use this 'cutoff' to assess the collinearity of the above model.
+    ```{r eval=F}
+    "
+    Write your answer here
+    "
+    ```
+  * It is possible that these three variables are correlated with each other, by dropping *two* we may be able to improve the model.
+    ```{r}
+    mod1_red = lm(adj_violent_crimes ~ Population_Density + 
+                 Percent_of_households_with_no_car +  
+                 Percent_with_a_Graduate_Degree_ + 
+                 Percent_Black_Alone +
+                 Median_House_Value +
+                 Median_Rent_ +
+                 Income_Gini_Coefficient_,
+                 data=chicago@data)
+
+    vif(mod1_red)
+    ```
+  * Do you notice an improvement in VIFs?
+    ```{r eval=F}
+    "
+    Write your answer here
+    "
+    ```
+  * Perform an ANOVA test of these two nested models. Compare the full and reduced forms of the model.
+    ```{r}
+    anova(mod1, mod1_red)
+    ```
+    
+As a final diagnostic we might want to examine the marginal contribution of each variable to the model, its 'extra sum of squares'. The `modelEffectSizes` function in the `lmSupport` library provides partial R-Squared values, which it calls the `pEta-sqr`. We see that the percent black alone variable has the highest partial R-square but we previously saw that race was correlated with other factors that might be related to violent crime. Should we have dropped race from the model and included education and female headed households? Understanding that race is an important factor for violent crime prevalence in Chicago is an important insight, but this should be tempered by the fact that race, as we saw, is highly correlated with other factors that are also associated with crime. Its very hard, many would say impossible, to make causal statements using a model like this. Causal statments would be of the nature, "a X% rise in the number of single parent female headed households causes a rise of X in the number of crimes." There is a maixm in statistics, "there is no causation without manipulation", that is, you can't establish causal relationships without experimental manipulation. In the social sciences "manipulations" are expensive, ethically complicated, and rarely done. This may not be the case in the physical sciences.
+
+We can examine the marginal contribution of each variable to the model, that is, its impact on the model given that all other variables are already in the model:
+
+```{r}
+library(lmSupport)  # You'll probably need to install this one
+# Think seriously about what we are measuring here (read the package help for more details)
+# When talking about these results, break down this test in terms of effect sizes...
+modelEffectSizes(mod1_red)
+```
+
+## Deliverables
+
+For this lab you have to make 4 regression models (you've already done one!). One model should be for violent crime (the variable used in the demonstration), the other three variables can be any type of crime selected from the Chicago data. For each model:
+
+  * Select variables that you hypothesize are associated with the outcome type of crime.
+  * Map the dependent variable (a type of crime)
+  * Develop a model by building it incrementally (using forward or backward selection). Test nested versions of the same model. Check residual plots, check for multicollinearity, examine the partial R-Square for each variable. Look at AIC, $R^2$, ANOVA, and any other diagnostics you can think of (see class notes).
+  * Interpret the model. Pay special attention to the sign and significance of each variable. Do the predictors align with your intuition about the association between social/economic characteristics and the frequency of crime?
+
+### Things to keep in mind
+Overall, do you notice any patterns across your four models? Are certain variables routinely associated with crime? Be careful in your interpretation of model coefficients. Why do you think these factors seem associated with crime? For example, in the model above we say that percent black was the most influential predictor of violent crime frequency. I wonder what the race variable is actually measuring, could it be a proxy for other variables that are highly correlated with the racial composition of neighborhoods and also influence crime? For example, 'latent' constructs like structural disadvantage and lack of access to opportunity?
+
+### Reference
+
+This lab has been adapted from a [lab developed by Dr. Seth Spielman](http://www.sethspielman.org/courses/geog5023/labs15/Lab_2015_Multiple_Regression.html) at the University of Colorado at Boulder.

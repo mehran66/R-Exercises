@@ -1,0 +1,273 @@
+---
+title: "Lab 7: Spatial Autocorrelation & Spatial Weights"
+author: "Merhan Ghandehari"
+date: "March 29, 2016"
+output: html_document
+---
+
+The focus of this lab is on developing spatial weights matrices and computing some spatial autocorrelation statistics. The dataset of this lab contains data on the 2004 (Bush vs. Kerry) Presidential elections. Here is the variables that we have in our election dataset (Bush_pct is our variable of interests): 
+```{r echo=F}
+library(maptools) # Tools for mapping
+library(rgdal)    # Reading and writing geographic data
+library(stringr)  # Working with strings
+library(ggplot2)  # Plotting and stuff
+library(ggthemes) # Some nice themes, including the theme_map
+library(plyr)     # The join fuction and others
+library(rgeos)
+library(gpclib)
+library(spdep)
+```
+
+```{r echo=F, results='hide', message=FALSE}
+# importing dataset
+load("data/election.rda")
+data.election = election_new
+# List all objects in your workspace (including previous objects and the new datasets)
+names(data.election)
+summary(data.election)
+#plot(data.election)
+```
+
+```{r echo=F}
+names(data.election)
+```
+
+#Methods
+The first plot illustare the percentage of votes for Bush in each county of the USA. Based on this plot, we can conclude that in most of counties the percentage of votes for Bush is higher than 50%. Also in the second plot we compare the winner of each county, and it's quite obvious that Bush is the winner of most of the counties.
+```{r echo=F, message=FALSE, fig.align='center'}
+#proj4string(data.election) = CRS("")
+palette = colorRampPalette(c("lightblue", "darkblue"), space = "rgb")
+spplot(data.election, "Bush_pct", col.regions=palette(20), 
+       main="USA Presidential elections (2004)",
+       sub="Darker = More vote for Bush | Lighter = Less vote for Bush")
+
+compare = ifelse(data.election$Bush > data.election$Kerry,"red","blue")
+plot(data.election,col=compare,border=NA)
+legend(x="bottom",cex=.4,fill=c("red","blue"),bty="n",legend=c("Bush","Kerry"),title="Winner of County Vote of the USA Presidential elections (2004)",ncol=2)
+```
+
+
+```{r echo=F, results='hide', message=FALSE, fig.align='center'}
+data.election@data$id <- as.numeric(rownames(data.election@data))-1
+class(data.election)  # Not a regular data.frame...
+new_map = fortify(data.election, region="FIPS")
+class(new_map)  # Now we have a regular data.frame!
+new_map<-merge(new_map,data.election@data,by.x="id",by.y="FIPS") #merge data frame from election.new (for plotting)
+
+p = ggplot(data=new_map, aes(x=long, y=lat, group=group))
+
+p = p + geom_polygon(aes(fill=Bush_pct)) + coord_equal() + labs(x="Longitude", y="Latitude", title="Votes for Bush (2004)") + coord_map("albers",  at0=45.5, lat1=29.5) + scale_fill_gradient('Bush', low = "white", high = "red", space = "Lab", na.value = "grey50", guide = "colourbar")
+```
+
+contiguity matrix: In this part, we create differnt contiguity and weight matrix to describe spatial relationships.
+
+It seems that number of neghborhoods for each conuty is not homoginious in the USA. We can devide the states into two parts; The east part with small counties, and the west part with mach larger counies. So one contiguity matrix may have compeltly differnt resullts in the east and west part of the states. Here, for our variable we decided to choose those methods are efficient for irregularly-spaced data. In the case of spatial analsysis of election dataset, three of the best contiguity structures that is most effective in preserving spatial relationships and spatial autocorrelation analysis are disrect contiguity (queen method), 6 nearest neighbor, and sphere of influence. It's quite clear that other methods does not work well as they cannot model the east and west part of USA in a similar and appropriate way; that is, we have irrrelavent connections in the east part and on the other hand the connections in the west part is understimated. But, in the above-mentioned methods, relationships are modeled in a homoginious way, and the area of counties and/or the distance between neighborhood counties would not influence the reslts in the contiguity matrix. 
+Because we should only choose one contiguity structures as the best for our analysis, we chose disrect contiguity (queen method) becasue of several reasons 1) in this method we do not model Second or higher order neighbors in our contiguity matrix (modeling second and higher order neighbors maybe appropriate in the east part of the state due to small counties and the patter that we see in the election, but that cannot be acceptable in the west part of the state), 2) We would not have neghborless units, 3) It's an efficient methos for irregularly-spaced data, 4) there would not any irrrelavent connections in our contiguity structure, 5) The weight matrix is less noisy.
+
+```{r echo=F, message=FALSE, fig.align='center'}
+map_crd <- coordinates(data.election)
+W_cont <- poly2nb(data.election, queen=T)
+W_cont_mat <- nb2listw(W_cont, style="W", zero.policy=TRUE) # create a spatial weights matrix
+plot(data.election, pch=19, cex=0.1, col="grey", border=NA)
+plot(W_cont_mat,coords=map_crd,pch=19, cex=0.1, lwd=0.2, col="red", add= TRUE)
+title("Direct Contiguity")
+```
+  
+```{r echo=F, message=FALSE, results='hide'}
+W_knn1 = knn2nb(knearneigh(map_crd, k=1))
+W_knn1_mat = nb2listw(W_knn1)
+#plot(data.election, pch=19, cex=0.1, col="grey", border=NA)
+#plot(W_knn1_mat,coords=map_crd,pch=19, cex=0.1, lwd=0.2, col="red", add= TRUE)
+#title("k=1 (Centroids)")
+```
+
+```{r echo=F, message=FALSE, results='hide'}
+W_knn4 = knn2nb(knearneigh(map_crd, k=4))
+W_knn4_mat = nb2listw(W_knn4)
+#plot(data.election, pch=19, cex=0.1, col="grey", border=NA)
+#plot(W_knn4_mat,coords=map_crd,pch=19, cex=0.1, lwd=0.2, col="red", add= TRUE)
+#title("k=4 (Centroids)")
+```
+
+```{r echo=F, message=FALSE, results='hide'}
+W_knn6 = knn2nb(knearneigh(map_crd, k=6))
+W_knn6_mat = nb2listw(W_knn6)
+#plot(data.election, pch=19, cex=0.1, col="grey", border=NA)
+#plot(W_knn6_mat,coords=map_crd,pch=19, cex=0.1, lwd=0.2, col="red", add= TRUE)
+#title("k=6 (Centroids)")
+```
+
+```{r echo=F, message=FALSE, results='hide'}
+dist = unlist(nbdists(W_knn1, map_crd))
+W_dist1 = dnearneigh(map_crd, d1=0, d2=max(dist)) 
+W_dist1_mat = nb2listw(W_dist1)
+#plot(data.election, pch=19, cex=0.1, col="grey", border=NA)
+#plot(W_dist1_mat, coords=map_crd, pch=19, lwd=0.2, cex=0.1, col="red", add= TRUE)
+#title("Minimum Distance (Centroids)")
+```
+
+```{r echo=F, message=FALSE, results='hide'}
+#Sphere of Influence
+W_del = tri2nb(map_crd)
+W_soi = graph2nb(soi.graph(W_del, map_crd))
+W_soi_mat = nb2listw(W_soi)
+#plot(data.election, pch=19, cex=0.1, col="grey", border=NA)
+#plot(W_soi_mat, coords=map_crd, pch=19, cex=0.1,lwd=0.2, col="red", add= TRUE)
+#title("Sphere of Influence (Centroids)")
+```
+
+
+```{r echo=F, message=FALSE, results='hide'}
+#distances as weights
+W_knn5 = knn2nb(knearneigh(map_crd, k=5))
+W_knn5_mat = nb2listw(W_knn4)
+
+W.dist <- nbdists(W_knn5, map_crd)  # calculates distance
+# now invert distance to determine weights (closer=higher)
+W.dist1 <- lapply(W.dist, function(x) {ifelse(is.finite(1/x), (1/x), (1/0.001))}) 
+W.dist2 <- lapply(W.dist, function(x) {ifelse(is.finite(1/x^2), (1/x^2), (1/0.001^2))}) 
+summary(unlist(W.dist1))  # check out the distance distribution
+
+# now create sp. weights matrix weighted on distance
+W.dist1_mat  <- nb2listw(W_knn5, glist=W.dist1)  
+W.dist2_mat <- nb2listw(W_knn5, glist=W.dist1)  
+
+moran.test(data.election$Bush_pct, W.dist1_mat)
+moran.test(data.election$Bush_pct, W.dist2_mat)
+```
+
+- Global Moran's I: The value of this metric for the Bush percentage variable is 0.5565. This means that we have a positive spatial autocorrelation (It also can be seen in the Moran scatterplot - the positive slope of the regression line). That is, similar values appear close to each other. We have a quite small p-value that means clustering in our variable of interest is sygnificant and it is not based on spaial randomness (null hypothesis). So The counties that the pecentage of votes for Bush is higher tend to be neighbor.
+```{r echo=F, message=FALSE, fig.align='center'}
+# Global Autocorrelation Tests
+moran.test(data.election$Bush_pct, listw=W_cont_mat, zero.policy=T) #Moran's I
+
+
+## Moran Scatterplot
+moran.plot(data.election$Bush_pct, listw=W_cont_mat, zero.policy=T, xlim=c(0,100),ylim=c(0,100), pch=16, col="darkgrey",cex=.5, labels=as.character(data.election$NAME),xlab="Percent for Bush", ylab="Percent for Bush (Spatial Lag)", main="Moran Scatterplot")
+```
+
+- Here also we created a permutation test for Moran's I
+
+```{r echo=F, message=FALSE, fig.align='center'}
+mI_perm999 <- moran.mc(data.election$Bush_pct, W_soi_mat, 999) 
+hist(mI_perm999$res,breaks="scott",freq=FALSE,col="light blue",main="Permutation Test for Moran's I - 999 permutations")
+lines(mI_perm999$statistic,max(graph999$counts),type="h",col="red",lwd=2)
+lines(density(mI_perm999$res),col="blue",lwd=1.5)
+```
+
+- Geary's C, Getis-Ord General G, and join count: Here we also ran some other global autocorrelation tests. The value of Geary's C lies between 0 and 2. 1 means no spatial autocorrelation and values lower than 1 indicate increasing positive spatial autocorrelation. The value of this test in our analysis is 0.42 that is a result of positive spatial autocorrelation. Again the small p-value illustares that location matters in the our variable and it's not a random process in space.
+The null hypothesis for the General G statistic states "there is no spatial clustering of the values". When General G index may be higher than the expected General G index, and the p-value is statisticaly sygnificant, it means that high values are clustered. here the result of our test shows that General G index is higher than the expected General G index, and the p-value is statisticaly sygnificant. So we can reject the null hypothesis, and concude that high values are clustered.
+We also use another test called joincount that results verify all of the above conclusions.
+```{r echo=F, message=FALSE}
+geary.test(data.election$Bush_pct, listw=listw2U(W_cont_mat), zero.policy=T) #Geary's C
+# use symmetric matrix
+
+globalG.test(data.election$Bush_pct, listw=W_cont_mat, zero.policy=T) #Getis-Ord General G
+
+compare <- as.factor(ifelse(data.election$Bush > data.election$Kerry,1,0)) #Join Count
+joincount.multi(compare, listw=W_cont_mat, zero.policy=T)
+```
+
+
+# Local Autocorrelation:
+
+-Local Moran's I: To investigate the spatial clusters of features with high or low values we used this measure. This measure calculates a value for feature in the dataset. One of the outputs of localF function is the Z values for each feature that illustrate the spatial clusters of high or low values. High positive Z values illustrate features surrounded with features that have similar values (either high values or low values). A low negative z-score is representative of an outlier. Here w should keep in mind that a feature with high value is not necessarly statistically significant hot spot. A feature is considered a statistically significant hot spot when is surrounded with other high values as well. We mapped both the value of Local Moran's I and the Z value in tow diffrerent maps. From the map of Z values, we can see that the Z values are mostly high and positive that means we have clusters and based of the map of Local Moran's I, we can conclud that these hot spots are as a result of high values surrounded by high values. Also there are a few outlires  visible in the Z value map. We also created a LISA Cluster Map that clearly represent the low-low, low-high, high-low, and high-high clusters.
+
+```{r echo=F, message=FALSE, fig.align='center'}
+lm1 = localmoran(data.election$Bush_pct, listw=W_cont_mat, zero.policy=TRUE)
+
+data.election$local_moran = (lm1[, "Ii"]) 
+palette = colorRampPalette(c("white", "red"), space = "rgb")
+spplot(data.election, zcol="local_moran", col.regions=palette(20), main="Local Moran's I", pretty=T, edge.col = "transparent")
+
+data.election$local_moran_Z1 = (lm1[, "Z.Ii"]) # z-scores
+palette = colorRampPalette(c("white", "red"), space = "rgb")
+spplot(data.election, zcol="local_moran_Z1", col.regions=palette(20), main="Local Moran's I (z values)", pretty=T, edge.col = "transparent")
+
+#lm2 = localmoran.sad(lm(Bush_pct~1,data.election), nb=W_cont, style="W", zero.policy=TRUE) # saddlepoint approximation
+#head(lm2)
+
+#lm3 = localmoran.exact(lm(Bush_pct~1,data.election), nb=W_cont, style="W", zero.policy=TRUE) # saddlepoint approximation
+#head(lm3)
+```
+
+```{r echo=F, message=FALSE, fig.align='center'}
+# Create a LISA Cluster Map
+# reference: http://isites.harvard.edu/fs/docs/icb.topic923307.files/R%20code%20for%20Lab%20Ex%206.txt
+
+quadrant <- vector(mode="numeric",length=nrow(lm1))
+
+# centers the variable of interest around its mean
+cCMEDV = (lag.listw(W_soi_mat,data.election$Bush_pct)) - mean(data.election$Bush_pct)
+#cCMEDV <- data.election$Bush_pct - mean(data.election$Bush_pct)  
+
+# centers the Z value local Moran's around the mean
+C_mI <- lm1[,4]  
+
+signif <- 0.1       
+# set a statistical significance level for the local Moran's
+
+quadrant[cCMEDV >0 & C_mI>0] <- 4      
+# these four command lines define the high-high, low-low
+# low-high and high-low categories
+
+quadrant[cCMEDV <0 & C_mI>0] <- 1      
+quadrant[cCMEDV <0 & C_mI<0] <- 2
+quadrant[cCMEDV >0 & C_mI<0] <- 3
+quadrant[lm1[,5]>signif] <- 0     
+# places non-significant Moran's in the category "0"
+
+brks <- c(0,1,2,3,4)
+colors <- c("white","blue",rgb(0,0,1,alpha=0.4),rgb(1,0,0,alpha=0.4),"red")
+plot(data.election,border="lightgray",col=colors[findInterval(quadrant,brks,all.inside=FALSE)])
+box()
+legend("bottomright",legend=c("insignificant","low-low","low-high","high-low","high-high"),
+       fill=colors,bty="n",cex=0.7,y.intersp=1,x.intersp=1)
+title("LISA Cluster Map")
+```
+
+- Local Getis-Ord G*: Here the high positive and negative Z values can be considered statistically significant. Large positive Z values indicated that high values are clustered and is called hot spot. On the otehr hand, Large negative Z values indicated that low values are clustered and is called cold spot. This value of Z also shows the intensity of this cluster. In fact, based on the R help tutorial, "High positive values indicate the posibility of a local cluster of high values of the variable being analysed, very low relative values a similar cluster of low values". In our result, we can see variuos hot spots all around the state. The cold spots also have occured in a smaller portions od the states mostly in the NM, CO, MN, ME, NH, MA, and MS. 
+```{r echo=F, message=FALSE, fig.align='center'}
+lm4 = localG(data.election$Bush_pct, listw=W_cont_mat, zero.policy=TRUE)
+data.election$local_moran_Z1 = abs(as.numeric(lm4))
+palette = colorRampPalette(c("white", "red"), space = "rgb")
+spplot(data.election, zcol="local_moran_Z1", col.regions=palette(20), main="Local Getis-Ord G* (z values)", pretty=T, edge.col = "transparent")
+```
+
+- Here I fitted a linear model and compute spatial autocorrelation statistics on the residuals. The plot of residuals shows that residuals are strongly correlated with the independent variable (Bush_pct). Also I ran a spatial lag regression on the same parameters; in the linear model all of the independet variable were significant and the p-value for the model is quite small and I can reject the null hypothesis, but in the spatial lag regression, one of the independet variables is not significant and the p-value for the model is 0.31536, and I cannot reject the null hypothesis.
+```{r echo=F, message=FALSE, fig.align='center'}
+lm<-lm(Bush_pct~pcturban + pctpoor + rent + BLACK, data=data.election)
+summary(lm)
+data.election$lmresid<-residuals(lm)
+data.election$fitted <- fitted(lm)
+
+plot(data.election$lmresid, data.election$Bush_pct)
+
+lm.morantest(lm,W_soi_mat) #Moran's I test for residual spatial autocorrelation
+# spatial lag regression
+Bush_spatial_lag <- lagsarlm(Bush_pct~pcturban + pctpoor + rent + BLACK, data=data.election, W_soi_mat)
+summary(Bush_spatial_lag)
+```
+
+#Discission
+
+- Global metrics
+
+All of the metrics show that high values are spatially clustered.
+One differnce that I noticed in these two metric is the differnt way of interpretation of their results. In Global Moran's I, when the p value is statistically significant, the null hypothesis can be rejected, and based on the Moran's I statistic value and Z score, we can conclud that the spatial distribution of high and /or low values are spatially clusered (Moran's I statistic value is close to one and Z score is positve) or dispersed (Moran's I statistic value is close to negative one and Z score is positve). On the other hand, in etis-Ord General G when the p value is statistically significant, the null hypothesis can be rejected, and based on the Z score, we can coclud that if z value is positive the spatial distribution of high values is more clustered than expectations and is z value is negative the spatial distribution of low values is more clustered than expectations (http://help.arcgis.com/En/Arcgisdesktop/10.0/Help/index.html#//005p0000000q000000).
+
+The Getis-Ord General G method works well only when we have an even distribution of values. When we have both low and high values cluster, this method does not work properly because low and high clusters cancel each other out. Although in our dataset the dominent cluster is the high values, but still we can see the spatial low clusters in our map. So Global Moran's I would be a better choice for our dataset.
+
+- Local metrics
+
+Although Local Getis-Ord G and local moran's I are used to find the clusters, but they have some key differnces. The output of localmoran function contains both the value of local moran's I and the Z value. But, the output of localG is only Z value. Furthuremore, Interpretation of the z values in these two measures are completly different. In the local moran's I, a positive z score for a feature is a result of having neighbor features with similar values, and a negative z score for a feature is a result being an outlier. But, in Local Getis-Ord G, high positive Z values is due to the clustering of high values, and high negative Z values is due to the clustering of low values. So,  Local Getis-Ord G cannot be used to identify outliers. By the way, this difference between these two methods exists because in the local moran's I, the value of each feature is not included in the analysis of that feature, but in Local Getis-Ord G, the value of each feature is included in its own analysis. 
+Getis-Ord G cannot be perfect measure of local autocorrelation in our case because for each feature we only have about 6 neighbor in the the weight matrix, and if a feature surrounds with low values, that feature might be identified as a hot spot. So, Getis-Ord G would be appropriate solely if we increase the size of the neighborhoods.
+
+
+----------------
+library(knitr)
+rmarkdown::render('ghandehari_lab7.Rmd')
+
+
+
+

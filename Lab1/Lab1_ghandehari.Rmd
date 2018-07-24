@@ -1,0 +1,58 @@
+---
+title: "Hello R :)"
+author: "Mehran Ghandehari"
+output: html_document
+---
+
+This is the first R Markdown document that I am creating. 
+
+**1. A list**
+
+```{r}
+n = c(2, 3, 5)
+s = c("aa", "bb", "cc", "dd", "ee")
+x = list(n, s, 2)
+x[1:2]
+```
+
+**2. one link & Load some data into R**
+
+```{r}
+Running = read.csv("http://www.mosaic-web.org/go/datasets/running-longitudinal.csv")
+```
+
+**3. A formatted table**
+
+```{r pander}
+temp = Running[1:6,]
+library('pander')
+pander(temp)
+```
+
+**4. Summarize data** 
+
+```{r}
+temp$sex = as.factor(temp$sex)
+temp$id = as.factor(temp$id)
+summary(temp)
+```
+
+**5. Create plots**
+
+```{r}
+plot(temp$age, temp$net,
+     xlab = "age",
+     ylab = "net",
+     pch = 20,
+     col = "grey")
+
+hist(temp$year,
+     #border = NA,
+     col = "beige", # Or use: col = colors() [18]
+     xlab = "year")
+
+boxplot(temp$gun,
+        col = "beige",
+        horizontal = T,
+        xlab = "gun")
+```

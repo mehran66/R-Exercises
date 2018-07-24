@@ -1,0 +1,187 @@
+---
+title: "Lab 2: Statistical Comparisons"
+author: "Mehran Ghandehari"
+output: html_document
+---
+The purpus of this lab is to do some hypothesis tests on data includes information about every building in Manhattan in order to answer the folowing question:
+"Are historic buildings in New York City worth more or less than their non-historic counterparts?"
+
+In the first step of this lab, data is imported and preprocesed. The data is imported from a .dbf file using the "foreign" library. For preprocessing the data, first buildings that have not geographic coordinates in the table are eliminated. Then buildings that are in a historic district are identifiled based on an attribute labled HistDist. A new categorical attribute labled HD is created containing 0 and 1 to refer to absence or presence of historic disticts, respectively. There are 32142 and 10372 buildings labled as 0 and 1, respectively. Here you can see a map of historic districts (historic disticts are red dots).
+```{r, echo=FALSE}
+# Load the "foreign" package
+library(foreign)
+
+# Load data
+MN = read.dbf("data/MNMapPLUTO.dbf")
+
+# Select locations with X, Y coordinates
+# Overwrite MN to contain only buildings with valid coordinates
+MN <- MN[MN$YCoord > 0 & MN$XCoord > 0,]
+
+# Note: this line will return an error when you try to run it.
+# Correct the line by making it evaluate all rows in the MN table
+MN$HD = ifelse(is.na(MN[,"HistDist"]), 0, 1)
+
+# Convert MN$HD to a factor
+MN$HD = as.factor(MN$HD) 
+```
+```{r, echo=FALSE, fig.align='center'}
+# "col" changes the color of dots depending upon the value in the "HD" column
+# "pch" sets the symbol to a solid dot
+# "cex"  makes the dot .5 the normal size
+# Note that setting asp=1 will set the aspect ratio to 1
+par(mar=c(2,2,0.5,0.5))
+plot(YCoord ~ XCoord, data=MN, col=HD, pch=16, cex=.5, asp=1)
+legend('topright', c("Historic buildings","Non-historic buildings"), cex=.8, col=c('red', 'black'), pch=c(16,16))
+```
+
+After preparing the data, the effects of historic districts on property value using hypothesis tests are investigated. 
+
+# Hypothesis Test # 1
+First we should define the null hypothesis:
+
+  Null hypothesis = "historic districts has no effect on property values"
+  Alternative hypothesis = "the buildings in a historic district have not the same       value as those outside of a historic district"
+  
+To begin testing the above-mentioned hypothesis, T test is empolyed. Generally this test is used to test the hypothesis that two populations have equal means. This test is named Welch's t-test. The test here is two-sided with 0.95 confidence level (significance level = 0.05). Below you can see the T test on two categories (inHD: historic buildings, outHD: non-historic buildings) and test statistics provide with the test.
+
+```{r, echo=FALSE}
+# inHD is for the historic buildings 
+inHD = MN[MN$HD ==1, ] 
+
+# outHD is for for the buildings outside a historic district
+outHD = MN[MN$HD ==0, ]
+```
+```{r }
+# independent 2-group t-test
+# AssessTot is the prperty value
+t.test(x=inHD$AssessTot, y=outHD$AssessTot) # Hypothesis Test #1
+```
+
+the P-value of 2.2 * 10^16 is a very strong evidence that difference in group means is not equal to zero. I reject the null hypothesis because:
+
+* The p-value is smaller than the significance level of 0.05
+* The difference between means is 2491909. A difference this large would only happen by chance 1 time in 2.2 * 10^16 experiments. So the difference in means is not        chance.
+* The large t-statistic indicates that difference between two groups is very large. So it cannot be a random chance.
+* The confidence interval does not include zero. So the diffrence between these two groups is statistically significant.
+  
+Baseed on this test we reject the null hypothesis and conclude that historic buildings in New York City worth less than their non-historic counterparts.
+
+# Hypothesis Test # 2
+There is a bias in test 1 that we cannot accept the results; historic buildings tend to be much smaller than non-historic buildings. Threfore, we should take the area of buildings into acount. Here we do another test. The assumption (null hypathesis) is that the area of non-historic buildings is equal to historic buildings. Here you can see results of the second hypothesis test:
+
+```{r }
+t.test(x=inHD$BldgArea, y=outHD$BldgArea)  # Hypothesis Test #2
+```
+Again t-statistic is large and p-value is quite small, and based upon the discussion in test 1, we can easily reject the null hypothesis. The mean area of non-historic buildings is also twice the mean area of historic buildings. As a result of this test, we can conclude that historic buildings tend to be smaller.
+
+# Hypothesis Test # 3
+In the third test, we consider the location of buildings. By the way, we should test those buildings that have simalar locations. To do this, we select those non-historic bildings which are on the same block as hictoric districts, and then run the test:
+
+```{r }
+# Select buildings on the same block as a historic district
+# Get a list of all blocks that contain historic buildings
+blocks = inHD$Block 
+
+# Select all buildings (from MN -> initial data) that are on the same block as historic buildings
+# The line below selects all rows where the block column contains values
+# in our list of blocks. It also saves the result as a new 'object'.
+HDB = MN[MN$Block %in% blocks, ] 
+
+# non-historic biulding inside of historic districts. 
+HDB_out = HDB[HDB$HD == 0, ]
+
+# All of the historic buildings
+HDB_in = HDB[HDB$HD == 1, ]
+```
+```{r }
+# HDB_out contains those non-historic buildings that are on the same block as a historic district
+# HDB_in contains historic buildings 
+t.test(x=HDB_in$AssessTot, y=HDB_out$AssessTot)  # Hypothesis Test #3
+```
+The results of this test also is the same as the previous tests and we can easily reject the null hypothesis, and conclude that the buildings in a historic district have not the same value as those non-historic buildings inside of historic district blocks. This test improved the validity of our assessment, but still has not take the area of buildings into acount. So, in the next test, we will normalize the variables based on the area.
+
+# Hypothesis Test # 4
+As we discussed before, we should conisider size of the buildings. Here we normalize the variables that we used in test 3 by deviding to area. By the way, Calculating price per square foot for buildings with an area greater than 0.
+```{r, echo=FALSE}
+# This could mean the lot is vacant, it could be an error.
+# either way it makes it hard to compute the price per square foot.
+# We need to exlude these zero area buildings from out t-test
+
+# Calcuate price per square foot for historic buildings
+# _Only_ for buildings with an area greater than 0
+HDB_in_sqft = 
+  HDB_in[HDB_in$BldgArea > 0, "AssessTot"] / 
+  HDB_in[HDB_in$BldgArea > 0, "BldgArea"] 
+
+# Calcuate price per square foot for non-historic buildings
+HDB_out_sqft = 
+  HDB_out[HDB_out$BldgArea > 0, "AssessTot"] / 
+  HDB_out[HDB_out$BldgArea > 0, "BldgArea"]
+```
+```{r }
+t.test(x=HDB_in_sqft, y=HDB_out_sqft)  # Hypothesis Test #4
+```
+The results of this rest is different. T-statistic is small, and p-value is large. The p-value is much greater than the significance level. So we can accept the null hypothesis in this case. That is, price per square foot for historic buildings are the same as non-historic buldings, where are located in the historic blockes, and so historic districts has no effect on property values. 
+
+Here is the answer to, which buildings were used in the analysis and how many buildings were disqualified from the analysis and why were they disqualified? In our data set we started with 10372 historic buildings and 32142 non-historic buildings. Then we reduced the number of non-historic buldings to 3573 by selcting only those non-historic buldings that are in the historic blocks. finally by eliminating the building with an area equal to 0, we had 10266 historic, and 3466 non-historic buildings.
+
+One thing that I do not feel completly confident about these tests and like to discuss here is distribution of two groups that we used here in this lab. I see the sampels are very skewed and the value of a bunch of buildings can be considerde as outliers because they entirely change the results. As T-test is based on the mean, the result of this test can be influenced by the skewness of the data. For example for the the first and last test I created the box plot of two groups with and without the outliers:
+
+```{r, echo=FALSE, fig.align='center'}
+par(mfrow=c(1,2))
+boxplot(inHD$AssessTot,outHD$AssessTot, main = "Data of hypothesis test #1", xlab = "historic buildings    non-historic buildings", ylab = "property value")
+boxplot(inHD$AssessTot,outHD$AssessTot,outline=FALSE, main = "Data of hypothesis test #1\n without outliers", xlab ="historic buildings    non-historic buildings", ylab = "property value", col="green")
+par(mfrow=c(1,2))
+boxplot(HDB_in_sqft,HDB_out_sqft, main = "Data of hypothesis test #4", xlab ="historic buildings    non-historic buildings", ylab = "property value (price per square foot)")
+boxplot(HDB_in_sqft,HDB_out_sqft,outline=FALSE, main = "Data of hypothesis test #4\n without outliers", xlab ="historic buildings    non-historic buildings", ylab = "property value (price per square foot)", col="green")
+```
+
+I excluded the outliers of the data for test 4 by using "outlier rule" quantile +/- (1.5 * IQR). Here are the density function of the 
+
+```{r, echo=FALSE, fig.align='center' }
+x = HDB_in_sqft[HDB_in_sqft > quantile(HDB_in_sqft, .25) - 1.5*IQR(HDB_in_sqft) &  
+HDB_in_sqft < quantile(HDB_in_sqft, .75) + 1.5*IQR(HDB_in_sqft)]
+
+y= HDB_out_sqft[HDB_out_sqft > quantile(HDB_out_sqft, .25) - 1.5*IQR(HDB_out_sqft) & HDB_out_sqft < quantile(HDB_out_sqft, .75) + 1.5*IQR(HDB_out_sqft)]
+par(mfrow=c(1,2))
+plot(density(HDB_in_sqft), main ="historic buildings", xlab = "price per square foot")
+plot(density(x), main ="historic buildings\n without outliers", xlab = "price per square foot")
+par(mfrow=c(1,2))
+plot(density(HDB_out_sqft), main ="non-historic buildings", xlab = "price per square foot")
+plot(density(y), main ="non-historic buildings\n without outliers", xlab = "price per square foot")
+```
+
+Afterward, I reran test 4 with the new data and here is the result:
+```{r }
+# x is HDB_in_sqft after excluding the outliers
+# y is HDB_out_sqft after excluding the outliers
+t.test(x, y) # Hypothesis Test #4 after excluding the outliers
+```
+The results completely changed after excluding the outliers. Here I can reject the null hypothesis as the p-value is pretty small. Therefore, we can conclude that t-test is sensitive to outliers and is not considered a proper test for our case.
+
+Another intersting point of this test is the mean value of two sample test. Before eliminating the outliers, the mean of price per square foot for historic buildings (92.71261) was higher than the mean of price per square foot for non-historic buildings (91.52951). But after eliminating the outliers, results the opposite:
+per square foot for historic buildings = 64.66439
+price per square foot for non-historic buildings = 70.45884
+As a result, by running a one-sided t-test after eliminating the out liers, we can conclude that the price per square foot for non-historic buildings, where are located in the historic blocks, are greather than the price per square foot for historic buildings.
+
+An alternative test to evaluate our two groups is Mann-Whitney' test (also caled Wilcoxon tests). This test is a nonparametric technique based on median that can be applied on unknown distributions based on ranked data in comparison to t-test which has to be ran on normal distributions. So it might help to get around the outlier problem discussed before. Here is the results of Wilcoxon rank sum teston test 4 (I also ran this test on hypothesis tests 1, 2 and 3, and the results were the same as t-test).
+```{r }
+wilcox.test(HDB_in_sqft, HDB_out_sqft)  # Hypothesis Test #4 using Wilcoxon rank sum test
+
+wilcox.test(x, y) # Hypothesis Test #4 using Wilcoxon rank sum test after excluding the outliers
+```
+
+Using Wilcoxon test, as I expected, I can reject the null hypothesis due to the small p-value. The results also are the same before and after excluding the outliers that prove this methoud is based on median and is not sensitive to outliers. Therefore, this is an advantage of this test that you do not need to have normally distributed samples. Based on this test, we can conculde that price per square foot for historic buildings are not the same as non-historic buldings, where are located in the historic blocks. Based on my search, it seems that Wilcoxon test reduce the statistical power of the test. Also, in this test, there is less parameters in the results (e.g., there's no confidence interval), and so it's harder to make some quantitative statements about the difference between two samples.
+
+To answer the question of this lab, we need also to ran a one-sided hypothesis test:
+```{r }
+wilcox.test(HDB_in_sqft, HDB_out_sqft, alternative="less") # one-sided hypothesis test #4 using Wilcoxon rank sum test 
+
+# or
+
+t.test(x, y, alternative="less") # one-sided hypothesis test #4 using Wilcoxon rank sum test after excluding the outliers
+```
+Here the null hypothesis is that the price per square foot for historic buildings are greather than the price per square foot for non-historic buildings, where are located in the historic blocks. The p-value is very small (much smaller than the critical value), and we can reject the null hypothesis and accept the alternative hypothesis; i.e., the price per square foot for non-historic buildings, where are located in the historic blocks, are greather than the price per square foot for historic buildings.
+
+

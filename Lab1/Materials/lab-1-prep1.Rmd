@@ -1,0 +1,122 @@
+# Lab 1: Introduction to R
+
+## Introduction
+
+This is a modern statistics class - and modern statistics are done using computers. It is rarely useful to memorize formulas or compute statistical functions by hand, so a large component of this course will revolve around statistical computation. In fact, many of the statistical methods that we will be covering are simply too computationally intensive to be done by hand, so it is important to get a good grasp of statistical computation early on.
+
+### Modern statistics
+
+* computational
+* language-based
+* expressive
+* powerful
+
+We will be using the R statistical language - which provides an environment and language for doing statistical and scientific computation. It offers a command-based computing environment which is freely available for Windows, Mac, Linux, etc... We are going to be working within R Studio, which is a nice user interface that allows us to easily interact with R.
+
+### Construct commands
+
+* connect
+* repeat
+* accumulate
+* document
+
+Using a command-based language such as R, we will be able to connect complex functions together in simple ways, we can repeat time-intensive tasks on new or modified data to save us time and effort, we can string inputs and outputs together to create a chain of computations, and we can very easily document our work, so that others can follow along (like I'm doing now). This also has the benefit of making our statistical analysis more transparent and verifiable.
+
+### Starting up...
+
+In order to be able to effectively use this language-based approach to statistical computation, we need to learn the language, just like any language. The good news is that R is quite simple and easy to use - once you get the hang of it! So let's give it a try:
+
+Open **RStudio** and let's start typing!
+
+### Basic syntax
+
+#### Arithmetic
+
+Arithmetic functions: + - * / ^ ( )
+
+```{r}
+2+7
+2*7
+2^7
+```
+
+Functions: name( argument1, argument2, ... )
+
+```{r}
+sqrt(4)
+sin(2)
+```
+
+Loading new packages into R also requires using a function, the `library` function; which essentially fetches a package from R's library of packages:
+
+```{r}
+# install.packages("ggplot2")
+# If the following line throws an error, you need to the above line to install ggplot2
+library(ggplot2)  
+```
+
+Named arguments: When there is more than one argument, it's convenient to be able to refer to them by their names rather than by their positions.
+
+```{r}
+seq(from = 1, to = 10, by = 2)
+seq(from = 1, to = 10, length = 5)
+seq(1, 10, by = 2)
+seq(10, to = 1, length = 2)
+```
+
+#### Chaining
+
+You can use the output of one computation as an input to the next calculation:
+
+```{r}
+sqrt((sqrt(9))^2)
+```
+
+How many different calculations are being done here?
+
+#### Assingment
+
+You can store data and results for later use. You refer to the stored **object** by a name. The name should begin with a letter and not have any punctuation other than . or _. Best to keep your names short, but not so short that you can't remember what's stored where!
+
+```{r}
+temp = 16
+```
+
+Stored values are called objects. To refer to the value(s) stored in the object, just use the object's name:
+
+```{r}
+temp
+```
+
+This is a pretty powerful concept, and is similar to using variables in algrebra, with several important differences (See Aside 1.1 from text). To illustrate how assingment might be useful, consider the following distance calculation example:
+
+```{r}
+dx = 7
+dy = 9
+dist = sqrt(dx^2 + dy^2)
+dist
+```
+
+For those interested, this technique of writing statements with quantities referred to by name is called **abstraction**. Just by changing the values of `dx` and `dy`, we can repeat the calculation for different distances. So the calculations can be thought of as representing the general properties of a distance calculation, rather than a particular calculation for one situation.
+
+#### Getting data
+
+For this course, we'll usually use the function read.csv(). It takes as an argument the name of the dataset you want to read. There are many other ways to get data into R, and we'll explore some of these in the next exercize.
+
+```{r}
+Galton = read.csv("http://www.mosaic-web.org/go/datasets/galton.csv")
+```
+
+The above dataset contains Sir Fancis Galton's dataset of parent and child heights. Galton created the statistical concept of correlation and introduced the use of questionnaires and surveys for collecting data on human communities. In the 1880's, Francis Galton was developing ways to quantify the heritability of traits. As part of this work, he collected data on the heights of adult children and their parents, this data.frame contains those original measurements!
+
+You can also read in your own data, and you can even use the RStuio interface to load it (rather than the `read.csv()` function: `Tools > Import Dataset > From Text File...`.
+
+#### Getting help
+
+You can always get help on a particular function or tool by typing `help(topic)` or by inserting a question mark before the topic:
+
+```{r}
+?plot
+```
+
+Ok, now its time to move on to "Manipulating Data in R"...

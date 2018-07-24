@@ -1,0 +1,281 @@
+# Lab 1: Manipulating Data In R
+
+```{r message=FALSE, results="hide", echo=FALSE, error=FALSE, warning=FALSE}
+# boilerplate
+library(mosaic)
+results=TRUE
+```
+
+## How R Stores Data
+
+If you’ve taken an intro stats class or worked in Microsoft Excel, you’re probably used to working with data in a tabular format. That is, data stored in a table where the *row*s of the tables represent entities and the *columns* represent attributes. An entity can be a city, a neighborhood, an observation from an instrument, a tree, really anything that can be quantitatively summarized. Before diving into the storage and manipulation of tabular data it’s useful to understand some basic concepts.
+
+## Objects in R
+
+R is an object oriented programming language. This means that when you use R your computer essentially becomes a filing system for things that you create. Like any good filing system things have addresses or call numbers that you can quickly use to retrieve things. However, the bookshelf used to store the objects you create is limited in size by the amout of memory installed in your computer. You’re unlikely to bump into the memory limits of your computer in this class, but it’s important to realize that R objects actually occupy space in your computer.
+
+The code `a = 10` creates an object called a that contains the number `10`. The assignment operator `=` (you can also use `<-` which is the old standard in R) was used to assign the number `10` to the object `a`. You’ll use the assignment operator *a lot*! It is used to assign an object to a name, thus storing it in memory (the filing system) with the name as an address. The name `a` is the address that will be used to retrieve the object in the future. The name is completely arbitrary, I could have called the object `bob` or `zx10sf`. You can think of the object's name as an address, typing the name into the R console retrieves the object stored at that address and displays in the console. As a general rule, it’s helpful to give the objects you create a meaningful name. Names cannot begin in numbers, names are case sensitive (`A` and `a` would be different addresses), and names should't be the same as the names of functions (like `mean` or `sum`).
+
+```{r}
+a = 10
+a
+```
+
+In the code above `a` stores a number, thus it is an object of the type `numeric`. We can see the type of any R object by typing `class(objectName)` into the console:
+
+```{r}
+class(a)
+
+# Overwrite a and store a character text string
+a = "bacon"
+class(a)
+a
+```
+
+Objects of any type can be combined into a list using the combine function, `c()`. Lists are useful for storing information that logically belong together. Lists can be combined into longer lists:
+
+```{r}
+statesCarsonHasLived <- c("NY", "CO")  # A list with two elements
+length(statesCarsonHasLived)  # Returns the length of the list
+```
+
+```{r}
+statesCarsonWillVisitThisSemester <- c("AZ", "CA")
+
+# Combining lists
+statesCarsonKnows <- c(statesCarsonWillVisitThisSemester, statesCarsonHasLived)
+statesCarsonKnows
+```
+
+Indexing is a critical aspects of lists. It’s possible to pull individual elements of a list or a range of elements from a list.
+
+```{r}
+statesCarsonKnows[1] # Accces the first element of the list (index position 1)
+statesCarsonKnows[3] # Access index position 3
+statesCarsonKnows[2:4] # The colon denotes the range of integers from 2 to 4
+
+# A list of numbers to reorder the list or access the elements in a specific index order
+statesCarsonKnows[c(4,3,1,2)]
+
+# Permanently reorder the list
+statesCarsonKnows = statesCarsonKnows[c(4,3,1,2)]
+statesCarsonKnows
+
+# Alphabetize the list with sort
+alpha.statesCarsonKnows = sort(statesCarsonKnows)
+alpha.statesCarsonKnows
+```
+
+Elements of a list can be named, this facilitates accessing the list using an indexing scheme that may be more meaningful than numbers.
+
+```{r}
+# The schools I went to as a kid
+schools = c(kindergarten="Smiles & Chuckles", elementary="Deep Cove", middle="Bay Side", high="Stelly's")
+schools
+schools["high"]
+schools[c("high", "middle")]
+```
+
+## Tabular Data in R
+
+In R tabular data is stored in a 'data.frame' object. Data.frames are like a list with dimensions $n×p$. This is useful because both rows and columns can be used as named (or numbered) indices. Thus it is possible to ask for small sections of the table, like rows 1 to 5 and columns 2 to 4. However, because data frames have rows *and* columns our addressing scheme needs to include row addresses and column addresses. Note the use of the plural, addresses, when working with tables one often wants to retrieve multiple rows and columns, this is done using lists (like we played with in the previous section) created explicitly using `c()` or implicitly using other types of operators/functons.
+
+### An Example of Tabular Data
+
+Entity Name	Attribute 1	Attribute 2	Attribute p
+Fluffy	Cat	27lbs	Obese Adult
+Felix	Cat	12lbs	Health Adult
+Patches	Cat	6lbs	Kitten
+Row n	…	…	…
+
+R is distributed with a bunch of example data sets. To see a list of these type `data()` in the console. We'll load the quake data set, for an explanation of the data type `?quakes` into the console.
+
+```{r}
+data(quakes)
+
+# To see the size of the table use dim()
+dim(quakes) #1000 rows and 5 columns
+
+# To see the names of the columns
+names(quakes)
+
+# Show the first 10 rows of the quakes data.frame
+head(quakes, n=10)
+```
+
+Indexing of 'data.frames' is similar to the indexing of lists, except that one has to provide row and column addresses. Data.frames are indeces using the convention `dfname[row list, column list]`.
+
+```{r eval=FALSE}
+# Get the contents of the first row and the first column
+quakes[1, 1]
+
+# Get the first 10 rows?
+quakes[1:10] #NOTE THE ERROR!  I have not provided valid column addresses.
+
+# This works.  
+quakes[1:10,] #The blank after the comma indicates all columns.
+
+# Get the latitude and longitude of the first 10 quakes
+quakes[1:10, c("lat", "long")]  
+
+# Note 1:10 is a list and c("lat", "long") is a list
+
+# This is equivalent to the previous line
+quakes[1:10, 1:2] 
+```
+
+'data.frames' can also be indexed using column names with the syntax `df$colname`.
+
+```{r eval=FALSE}
+quakes$mag 
+
+quakes$mag[1:10] # Returns the first 10 entries in the mag column
+
+# The line above is equivalent to
+quakes[1:10, "mag"]
+```
+
+## Logical Expressions in R
+
+Logical expressions are expressions that evaluate to `TRUE` or `FALSE`. For example, "is this bigger than that" or "are these things equal". Logical expressions are created with logical operators, R uses the following logical operators:
+
+* `<` Less than
+* `>` Greater than
+* `==` Equal to
+* `>=` Greater than or equal to
+* `<=` Less than or equal to
+* `&&` And
+* `||` Or
+* `%in%` Matching operator
+
+```{r}
+# Examples of logical expressions
+10 == 5
+10 > 5
+a = 10  # Create an object that stores the number 10
+a == 10
+a > 10
+a >= a + 1
+"NY" %in% statesCarsonKnows
+c("RI", "CA") %in% statesCarsonKnows
+
+# Which quakes had a magnitude greater than 4.7?
+# use head to display the first 10 answers
+head(quakes$mag > 4.7, n = 10)
+```
+
+Tables can also be indexed using logical expressions. This is really useful!! R will return all rows for which the logical expression evaluates to true. Logical expressions are typically used as row index selectors:
+
+```{r}
+# Select all quakes with a magnitude of more than 5.7
+quakes[quakes$mag > 5.7,]
+
+# Subsets of tables can be saved as new objects.
+bigQuakes = quakes[quakes$mag > 5.7,] 
+dim(bigQuakes)
+```
+
+## Creating new variables
+
+It is fairly easy to create new variables in a data frame. All one has to do is name the column and assign values to it:
+
+```{r}
+# Create a column called "big"" stores the value "YES" for all quakes over magnitude 5.7
+quakes[quakes$mag > 5.7, "big"] <- "YES"
+```
+
+This syntax is a little bit complicated. First, we are selecting all rows of the table that contain a quake with a magnitude greater than 5.7. Next, we are "creating" a column called "big" simply by entering "big" in the column address. Next we’re assigning the word "YES" to the selected row column combination. The net result of this is that we’ve made a new column but most of it is empty, because very few quakes are greater than 5.7.
+
+```{r}
+quakes[1:10,] # Notice the <NA>?  These are mssing data.
+```
+
+We could fix the missing data simply by assigning the value "NO" to all quakes that are smaller than 5.7.
+
+```{r}
+# Fix missing data
+quakes[quakes$mag < 5.7, "big"] <- "NO" 
+```
+
+We could also have use a function called `ifelse` to create the column big. Try to figure it out? You can get help on the `ifelse` function by typing `?ifelse` into the console.
+
+## Summarizing objects
+
+R is terrible for 'looking' at data. It’s really hard and not very useful to look at tabular representations of your data in R. Instead of looking at the raw data I use the `summary` function. It displays the max, min, mean, 25th, 75th, and 50th percentile of numeric variables. You can actually use the `summary` function on almost any object in R, and it will give you some kind of useful output relevant to the object at hand...
+
+```{r}
+summary(quakes)
+```
+
+## Factors: Non-numeric Variables
+
+Notice that the `summary` of the big column is not especially useful. It tells us that the column stores characters. Actually, the column stores a variable that has two non-numeric levels. Many variables that you’ll work with, even if they appear as numbers aren’t really numeric variables. Consider a variable called "habitat type" where the value "1" represented "wetlands" and the value "2" represented "forest". R would see these as numeric variables even though the numers are simply codes.
+
+Non-numeric variables are called factors in R. Factors are variables that contain any number of distinct levels. R treats factors differently from numeric variables. Consider the list of states I like earlier. All states in the US have numeric IDs called Federal Information Processing Standard (FIPS) codes. We could re-create the list `statesCarsonKnows` using FIPS codes for the state.
+
+```{r}
+statesCarsonKnows = c(8, 36, 4, 6)
+```
+
+The problem is that adding New York (code 36) and Colorado (code 8) together is nonsense. It is sort of fun to imagine what a combination of those states would look like- lift lines would be a lot less orderly... It is certainly not true that adding Colorado and New York together equals Rhode Island, even though `36+8=44`. However, R has no problem doing just that.
+
+```{r}
+statesCarsonKnows[1] + statesCarsonKnows[2]
+```
+
+We need to tell R that the list `statesCarsonKnows` is a factor, not a numeric variable. We can do this by telling R to store the list as a factor.
+
+```{r}
+statesCarsonKnows = as.factor(statesCarsonKnows)
+```
+
+After converting the list to a factor R behaves more reasonably. Trying to add CO and NY yields an error "'+' not meaningful for factors." Converting the "big" column of the quake table to a factor yields a more reasonable and useful summary.
+
+```{r}
+quakes$big = as.factor(quakes$big)
+summary(quakes)
+```
+
+We have a problem. Why are there 8 NA’s in the big column? Try using `is.na(quakes$big)` to select rows from the quakes table. The goal is to produce output like what is shown below.
+
+Fix the NA’s so that `summary(quakes)` looks like this:
+
+```{r echo=FALSE}
+quakes$big = as.factor(ifelse(quakes$mag >= 5.7, "YES", "NO"))
+summary(quakes)
+```
+
+## By group summaries
+
+In a data.frame factors often represent distinct types or categories. Sometimes we will want more detailed summaries than the generic `summary` function provides. We might want to summarize the big quakes and small quakes seperately. We can do this by using the aggregate function. We’ll spend a lot of time using aggregate later in the semster. The `~` is used a lot in R. It stands for "described by"" (or "is a function of"...). This case we’re describing the magnitude by the big variable we created using logical expressions. To each aggregare of the data (level of `big`) we are applying the FUN (which stands for function) summary.
+
+```{r}
+aggregate(quakes$mag ~ quakes$big, FUN=summary)
+```
+
+We can even do basic group by in plots:
+
+```{r}
+plot(mag ~ big, data=quakes)
+```
+
+## Conclusion
+
+Data manipulation is a large part of any statsitical analysis. In this exercise we have just scratched the surface, in the first lab we’ll do some very complex data manipulation. It’s really easy to find help in online forums on data manipulation problems in R. However, it’s important to use the right vocabulary in your google searches, "data frame", "factor", "list" are all important key words to find relevant help. Words like "table" are not useful. It’s important to know that because R is open source anyone can contribute, this sometimes leads to messy things. For example, "tables" are a special data structure in R that is different from data.frames!
+
+# Assignment
+
+Use what you have learned here, and the power of Google, to create an R Markdown document with the following elements:
+
+1. Title
+2. Subtitle (heading) with your name
+3. A list
+4. At least one link
+5. A formatted table
+6. Load some data into R
+7. Summarize that data in some interesting way
+8. Create a plot of that data (embedded in the R Markdown doc)
+
+Hand in the 'compiled' R Markdown document for the final submission.
+
+See the R Markdown zip file and cheetsheet for details.

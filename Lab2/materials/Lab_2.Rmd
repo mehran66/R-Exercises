@@ -1,0 +1,272 @@
+# Lab 2: Statistical Comparisons
+
+## Introduction
+
+Cities all over North America contain "historic" neighborhoods. Historic neighborhoods are areas where the buildings have historical importance not because of their individual significance but because as a collection they represent a the architectural sensibilities of a particular time period. In Boulder, for example, the [Martin Acres subdivision was recently surveyed for possible inclusion in a historic district](http://www.dailycamera.com/ci_16174096). Establishing the "significance" of a neighborhood's historical character is a matter for historians not statisticians. However, there is an important question about historic preservation -- does it help or hurt property values?
+
+## Working with real data
+
+We will be working with a dbase file. A dbase file is just another way of storing tabular data. There is little substantive difference between a dbase, csv, or an excel file. In spite of their functional similarity they each get handled differently in R. ArcGIS likes dbase files for some reason, so when you end up doing doing GIS stuff in your academic career you'll probably come accross dbase files. To read dbase files into R you have to load a library called 'foreign' -- its purpose is to read dbase (and other files foreign to R) files:
+
+```{r eval=FALSE}
+install.packages("foreign")
+```
+
+or simply `Packages > Install > "foreign"`. Once the foreign package has been installed we can load it in order to read dbase files:
+
+```{r}
+# Load the "foreign" package
+library(foreign)
+```
+
+But first, we need to get the file. We are working with a shapefile and associated dbase file for [Manhattan, New York](https://www.dropbox.com/s/b13sa3xs2a1822d/MNMapPLUTO.dbf?dl=1). Download the file to your computer and save to a good place. You can load the file like this:
+
+```{r}
+# Load data
+MN = read.dbf("data/MNMapPLUTO.dbf")
+```
+
+The data includes information on just about every building in Manhattan, over 40,000 buildings. Most buildings have X, Y coordinates allowing you to map them simply by using the plot command:
+
+```{r}
+# Map all of the buildings in Manhattan
+plot(YCoord ~ XCoord, data=MN)
+```
+
+Something is wrong. The resulting plot doesn't look at all like a map of Manhattan. Some buildings have not been assigned coordinates and have a X, Y position of 0,0 -- These must be removed from the data:
+
+```{r}
+# Look at the range of building x any y coordinates
+# Note that the coordinate range includes zero.
+
+summary(MN[ ,c("YCoord", "XCoord")])
+```
+
+Logical expressions are statements check a value and return `TRUE` or `FALSE`. For example, the logical expression `1 > 3`, if typed into R would return `FALSE`. We can use a logical expression to identify all buildings that have coordinates greater than zero:
+
+```{r eval=FALSE}
+# Careful, these lines will print many lines to your console!
+# Check each row to see if its Y coordinates are greater than zero
+MN$YCoord > 0
+
+# Check each row to see if its X coordinates are greater than zero
+MN$XCoord > 0
+
+# Combine the above to identify rows that have both X and Y coordinates above zero 
+# The line below is a double logical expression, both parts have to be true
+# for R to return TRUE
+MN$YCoord > 0 & MN$XCoord > 0
+```
+
+Now use `MN$YCoord > 0 & MN$XCoord > 0` to create a new object that includes only the rows that meet both criteria, that is only rows that have non-zero X AND Y coordinates. This is accomplished using the brackets. We’ve used this before, `MN[rows, columns]` where `rows` is a logical expression like the one above used to select rows that meet some criterion. Complete the line below to select only the rows that returned `TRUE` when you entered `MN$YCoord > 0 & MN$XCoord > 0`:
+
+```{r eval=FALSE}
+# Select locations with X, Y coordinates
+# Overwrite MN to contain only buildings with valid coordinates
+MN <- MN[...,]
+```
+```{r echo=FALSE}
+MN = MN[MN$YCoord > 0 & MN$XCoord > 0,]
+```
+
+You got the answer right if your `MN` object looks like this:
+
+```{r}
+dim(MN)
+```
+
+Your new map should look something like this:
+
+```{r}
+plot(YCoord ~ XCoord, data=MN)
+```
+
+Now that the data is fixed we can do some fun stuff:
+
+```{r}
+# Find buildings owned by someone famous who lives in MN
+# Grep() is a text searching function
+# in the line below grep() will identify rows where the owner name includes "trump"
+# You can replace "trump" with the last name of anyone who owns a building in Manhattan
+
+trumpBldgs <- grep("trump", MN$OwnerName, ignore.case=TRUE)
+
+# Print the address, and value of the building (note the output includes the row #)
+MN[trumpBldgs, c("Address", "AssessTot", "OwnerName")]
+```
+
+## Identifying Historic Districts
+
+We are interested in working with buildings that are in a historic district. We need to be able to identify these buildings, but the way the data file is coded is awkward:
+
+```{r eval=FALSE}
+summary(MN$HistDist)
+```
+
+If a building is in a historic district we know the name of the district. Notice that over 34000 buildings are a group called `NA's`, these appear near the bottom of the list of districts. These `NA` buildings are not in a historic district, when a building is not in a district, the HistDist variable is left blank -- `NA` is how R indicates that a value is blank or missing. We don't really care which district a building is in, only that it is in a historic district. We’ll now re-code the `HistDist` column to make a dummy variable which takes the value of `1` if a building is in a historic district and a value of `0` if it is not in a historic district.
+
+To do this we will use some new functions, `is.na()`, and `ifelse()`.
+
+```{r eval=FALSE}
+# is.na() is a logical expression, it returns true if a value is missing (NA)
+# check the first 100 rows of the "HistDist" column to see if they are blank
+is.na(MN[1:100, "HistDist"])
+```
+
+In the output the `TRUE` values indicate rows where the HistDist column is missing a value- these are places that are not in a historic district. The function `ifelse()` takes three arguments, a logical expression, a value for `TRUE`, and a value for `FALSE`. If the logical expression evaluates to `TRUE` the first value is used, if not the second value is used. The logical phrase `is.na()` tests each row in the table to see if the `HistDist` column is empty (`NA`). If the column is `NA` then the entry in a new column `HD` is `0` otherwise its `1`. The rows where `MN$HD == 1` represent buildings that are in a historic district.
+
+```{r eval=FALSE}
+# Take the previous line and replace the TRUE with 0
+ifelse(is.na(MN[1:100, "HistDist"]), 0, 1)
+```
+
+Modify the line below so that it runs the `ifelse()` function on all rows, *not just* the first 100 rows.
+
+```{r eval=FALSE}
+# Note: this line will return an error when you try to run it.
+# Correct the line by making it evaluate all rows in the MN table
+MN$HD = ifelse(is.na(MN[1:100, "HistDist"]), 0, 1)
+```
+
+```{r echo=FALSE}
+# Note: this line will return an error when you try to run it.
+# Correct the line by making it evaluate all rows in the MN table
+MN$HD = ifelse(is.na(MN[, "HistDist"]), 0, 1)
+```
+
+After you have corrected the column your output should match the line below:
+
+```{r}
+summary(MN$HD)
+```
+
+A variable that is coded `0`, `1` to refer to absence or presence, respectively, is sometimes called a 'dummy variable' or an 'indicator variable'. Since `MN$HD` measures if a building is in or out of a historic district, we should tell R that the numbers in the column are a code for historic districts, we do this by creating a `factor`; a `factor` is any column that contains categorical data.
+
+```{r}
+# Convert MN$HD to a factor
+MN$HD = as.factor(MN$HD) 
+# Note how the summary changes after changing the "HD" column to a factor
+summary(MN$HD)
+```
+
+Now we can draw a very crude map of historic districts.
+
+```{r}
+# "col" changes the color of dots depending upon the value in the "HD" column
+# "pch" sets the symbol to a solid dot
+# "cex"  makes the dot .5 the normal size
+# Note that setting asp=1 will set the aspect ratio to 1
+
+plot(YCoord ~ XCoord, data=MN, col=HD, pch=16, cex=.5, asp=1)
+```
+
+Finally, split the `MN` object into two tables, one for the historic buildings (`inHD`) and one for the buildings outside a historic district (`outHD`):
+
+```{r}
+# Add a comment describing the next line
+inHD = MN[MN$HD ==1, ] 
+
+# Add a comment describing the next line
+outHD = MN[MN$HD ==0, ]
+```
+
+## Hypothesis Testing
+
+In this lab our goal is to explore the effect of historic districts on property values in New York City. Our null hypothesis is that the designation of historic districts has no effect on property values, the buildings in a historic district have the same value as those outside of a historic district, and difference between the two groups is due to random chance.
+
+In R we can test this hypothesis with a function called `t.test()`, remember that when sample sizes are large `z` and `t`-tests are equivalent. The function `t.test` can take several arguments:
+
+* `x`: the data being tested
+* `y`: a comparison group (used for a two sample test)
+* `mu`: a fixed value (used for a one sample test)
+* `alternative`: can be “two.sided”, “less”, or “greater” this corresponds to different kinds of hypothesis tests. Here we are probably interested in two-sided tests that aim to establish if a value is not equal to mu or y. A one sided test can be used to test the hypothesis that mu or y is greater or less than x.
+* `conf.level`: allows you adjust the significance threshold. By default the `conf.level =.95`.
+
+The function is used by typing `t.test(x, y)`; so that it evaluates the null hypothesis that the `x` and `y` groups have the same mean:
+
+```{r}
+# Insert a comment describing the line below
+# In the comment state the null hypothesis
+t.test(x=inHD$AssessTot, y=outHD$AssessTot)  # Hypothesis Test 1
+```
+
+The test above, hypothesis test 1, provides you with a p-value and a t-statistic. In this test the t-statistic was very large indicating that the difference between historic and non-historic properties was very large, much larger than we would expect due to random chance (if the two types of properties actually had the same value). The 95 percent confidence interval, reported in the output from the `t.test` is the confidence interval for the difference between the `x` and `y` groups. Notice that the confidence interval does not include zero, this provides further support for your conclusion. Finally, the last line shows you the mean of the `x` and `y` groups:
+
+Remember if the p-value is greater than 0.05 we accept the null hypothesis that the two groups are the same. If the p-value is less than 0.05 we reject the null hypothesis. The p-value represents the probability of observing x due to chance *if the null hypothesis is true*, when this value is less than 0.05 we say the difference between `x` and `y` is "statistically significant". The t-test is just a formula designed to tell you if two quantities are different. It will not tell you the quantities you have chosen to test are an appropriate way to answer your research question.
+
+Hypothesis test 1 is *not a good test* of the null hypothesis that buildings in and out of historic districts have the same average value. Hypothesis test 1 compared all of the non-historic buildings in Manhattan to those in a historic district. The non-historic buildings included large high-rise luxury buildings located miles away from any historic district. If historic buildings tend to be smaller (because they are old and built before skyscrapers were common) they may not be worth as much as newer buildings simply because they are smaller.
+
+Run the following test, the column `BldgArea` describes the square footage of each building:
+
+```{r}
+# Add a comment describing this test
+t.test(x=inHD$BldgArea, y=outHD$BldgArea)  # Hypothesis Test 2
+```
+
+### Location, location, location...
+
+Location is an important component of a property's value. To test the impact of a historic district designation we should revise our test to examine only buildings that have similar locations. One way to do this is to identify buildings that are close to but outside of historic districts. Each building in the database has a block number. Lets revise `outHD` so that it only includes buildings which are on the same block as a historic district but outside of the district boundaries.
+
+```{r}
+# Select buildings on the same block as a historic district
+# Get a list of all blocks that contain historic buildings
+blocks = inHD$Block 
+
+# Display the first 5 rows of blocks
+head(blocks)
+
+# Select all buildings (from MN) that are on the same block as historic buildings
+# The line below selects all rows where the block column contains values
+# in our list of blocks. It also saves the result as a new 'object'.
+HDB = MN[MN$Block %in% blocks, ] 
+
+# Add a comment to describe the next line.
+# Hint: What does the object HDB_out contain?
+HDB_out = HDB[HDB$HD == 0, ]
+
+# Add a comment to describe the next line.
+# Hint: What does the object HDB_in contain?
+HDB_in = HDB[HDB$HD == 1, ]
+```
+
+Now we have two objects that contain buildings on blocks with contain historic districts, one object describes buildings in the district and the other describes those outside the district boundaries. Just what we need for another t-test:
+
+```{r}
+t.test(x=HDB_in$AssessTot, y=HDB_out$AssessTot)  # Hypothesis Test 3
+```
+
+The size of the building is an important determinant of its value. In hypothesis test 3 we did *not* control for the size of the building, we can do this by calculating the price per square foot (this one is a bit complicated, so ask your TA is you need more of an explanation!):
+
+```{r}
+# We have a problem. Some buildings have 0 area (square footage).
+summary(HDB_in$BldgArea)
+
+# This could mean the lot is vacant, it could be an error.
+# either way it makes it hard to compute the price per square foot.
+# We need to exlude these zero area buildings from out t-test
+
+# Calcuate price per square foot for historic buildings
+# _Only_ for buildings with an area greater than 0
+HDB_in_sqft = 
+  HDB_in[HDB_in$BldgArea > 0, "AssessTot"] / 
+  HDB_in[HDB_in$BldgArea > 0, "BldgArea"] 
+
+# Calcuate price per square foot for non-historic buildings
+HDB_out_sqft = 
+  HDB_out[HDB_out$BldgArea > 0, "AssessTot"] / 
+  HDB_out[HDB_out$BldgArea > 0, "BldgArea"] 
+```
+
+Now, use the objects `HDB_in_sqft` and `HDB_out_sqft` to construct a t-test using the `t.test()` function. If your output looks like the line below you have correctly constructed the t-test:
+
+```{r echo=FALSE}
+t.test(x=HDB_in_sqft, y=HDB_out_sqft)  # Hypothesis Test 4
+```
+
+# Assignment
+
+In 2-3 pages answer the question:
+
+> Are historic buildings in New York City worth more or less than their non-historic counterparts?
+  
+Explain the process through which you reached this conclusion. Support your conclusion with specific reference to null hypotheses and statistical procedeures (i.e. tests). Explain, which buildings were used in the analysis. How many buildings were disqualified from the analysis and why were they disqualified? Do you feel confient in your assessment? Do the data and the statistical procedeures allow you to definatively make a conclusion about the difference in the vlaue of hisoric and non-historic buildings? What about a different test? Try to find an alternative test in the literature or online and compare your results.
